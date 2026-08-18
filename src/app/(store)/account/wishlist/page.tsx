@@ -1,32 +1,12 @@
-"use client";
-
 import Link from "next/link";
 import { AccountSidebar } from "@/components/account/account-sidebar";
 import { Breadcrumbs } from "@/components/layout/breadcrumbs";
 import { ProductCard } from "@/components/products/product-card";
 import { Button } from "@/components/ui/button";
-import { useWishlistStore } from "@/lib/store/wishlist-store";
-import { useCartStore } from "@/lib/store/cart-store";
-import { useMounted } from "@/hooks/use-mounted";
-import { toast } from "sonner";
+import { getWishlistProducts } from "@/app/actions/wishlist";
 
-export default function WishlistPage() {
-  const mounted = useMounted();
-  const { items, clearWishlist } = useWishlistStore();
-  const addToCart = useCartStore((s) => s.addItem);
-
-  function moveAllToCart() {
-    items.forEach((p) => addToCart(p));
-    toast.success("All items added to cart");
-  }
-
-  if (!mounted) {
-    return (
-      <div className="container mx-auto px-4 py-16 text-center text-muted-foreground">
-        Loading wishlist...
-      </div>
-    );
-  }
+export default async function WishlistPage() {
+  const items = await getWishlistProducts();
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -44,14 +24,6 @@ export default function WishlistPage() {
         <div className="flex-1">
           <div className="flex items-center justify-between mb-6">
             <h1 className="font-serif text-3xl font-bold">My Wishlist ({items.length})</h1>
-            {items.length > 0 && (
-              <div className="flex gap-2">
-                <Button onClick={moveAllToCart}>Move All to Cart</Button>
-                <Button variant="outline" onClick={clearWishlist}>
-                  Clear
-                </Button>
-              </div>
-            )}
           </div>
 
           {items.length === 0 ? (

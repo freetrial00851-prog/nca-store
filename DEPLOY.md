@@ -29,7 +29,8 @@ In the Supabase **SQL Editor**, run these files **in order**:
 1. `supabase/migrations/001_initial_schema.sql`
 2. `supabase/migrations/002_rls_policies.sql`
 3. `supabase/migrations/003_coupon_min_order.sql`
-4. `supabase/seed.sql` (sample categories, products, coupons)
+4. `supabase/migrations/004_live_lockdown.sql` — contact messages table + secure order writes
+5. `supabase/seed.sql` (sample categories, products, coupons)
 
 Or paste the combined script: `supabase/setup-live.sql`
 

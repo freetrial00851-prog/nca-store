@@ -2,46 +2,50 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { createAdminClient } from "@/lib/supabase/server";
 import { isDemoMode } from "@/lib/demo-mode";
+import { getAdminDb } from "@/lib/auth-helpers";
 import { slugify } from "@/lib/utils";
-import type { Product } from "@/types/database";
+import type { Product, Coupon } from "@/types/database";
+
 export async function createProduct(formData: FormData) {
+  if (isDemoMode()) {
+    revalidatePath("/admin/products");
+    redirect("/admin/products");
+  }
+
+  const admin = await getAdminDb();
   const title = formData.get("title") as string;
   const slug = slugify(title);
 
-  try {
-    const admin = await createAdminClient();
+  const { data, error } = await admin.from("products").insert({
+    title,
+    slug,
+    description: formData.get("description") as string,
+    price: parseFloat(formData.get("price") as string),
+    sale_price: formData.get("sale_price")
+      ? parseFloat(formData.get("sale_price") as string)
+      : null,
+    category_id: formData.get("category_id") as string,
+    skill_level: formData.get("skill_level") as "Beginner" | "Easy" | "Intermediate" | "Advanced",
+    language: "English",
+    pages_count: parseInt(formData.get("pages_count") as string) || 0,
+    format: "PDF",
+    is_featured: formData.get("is_featured") === "on",
+    is_bestseller: formData.get("is_bestseller") === "on",
+    is_new: formData.get("is_new") === "on",
+    is_active: true,
+  }).select().single();
 
-    const { data, error } = await admin.from("products").insert({
-      title,
-      slug,
-      description: formData.get("description") as string,
-      price: parseFloat(formData.get("price") as string),
-      sale_price: formData.get("sale_price")
-        ? parseFloat(formData.get("sale_price") as string)
-        : null,
-      category_id: formData.get("category_id") as string,
-      skill_level: formData.get("skill_level") as "Beginner" | "Easy" | "Intermediate" | "Advanced",
-      language: "English",
-      pages_count: parseInt(formData.get("pages_count") as string) || 0,
-      format: "PDF",
-      is_featured: formData.get("is_featured") === "on",
-      is_bestseller: formData.get("is_bestseller") === "on",
-      is_new: formData.get("is_new") === "on",
-      is_active: true,
-    }).select().single();
+  if (error) throw new Error(error.message);
 
-    if (error) throw error;
-
-    const file = formData.get("file") as File | null;
-    if (file && file.size > 0 && data) {
-      const path = `patterns/${data.slug}.pdf`;
-      await admin.storage.from("pattern-files").upload(path, file);
-      await admin.from("products").update({ file_url: path }).eq("id", data.id);
-    }
-  } catch {
-    // Demo mode without Supabase — still redirect
+  const file = formData.get("file") as File | null;
+  if (file && file.size > 0 && data) {
+    const path = `patterns/${data.slug}.pdf`;
+    const { error: uploadError } = await admin.storage.from("pattern-files").upload(path, file, {
+      upsert: true,
+    });
+    if (uploadError) throw new Error(uploadError.message);
+    await admin.from("products").update({ file_url: path }).eq("id", data.id);
   }
 
   revalidatePath("/admin/products");
@@ -49,33 +53,73 @@ export async function createProduct(formData: FormData) {
 }
 
 export async function updateProduct(id: string, formData: FormData) {
-  try {
-    const admin = await createAdminClient();
+  if (isDemoMode()) {
+    revalidatePath("/admin/products");
+    redirect("/admin/products");
+  }
 
-    const { error } = await admin.from("products").update({
-      title: formData.get("title") as string,
-      description: formData.get("description") as string,
-      price: parseFloat(formData.get("price") as string),
-      sale_price: formData.get("sale_price")
-        ? parseFloat(formData.get("sale_price") as string)
-        : null,
-      category_id: formData.get("category_id") as string,
-      skill_level: formData.get("skill_level") as "Beginner" | "Easy" | "Intermediate" | "Advanced",
-      pages_count: parseInt(formData.get("pages_count") as string) || 0,
-      is_featured: formData.get("is_featured") === "on",
-      is_bestseller: formData.get("is_bestseller") === "on",
-      is_new: formData.get("is_new") === "on",
-      is_active: formData.get("is_active") === "on",
-    }).eq("id", id);
+  const admin = await getAdminDb();
 
-    if (error) throw error;
-  } catch {
-    // Demo mode without Supabase
+  const { error } = await admin.from("products").update({
+    title: formData.get("title") as string,
+    description: formData.get("description") as string,
+    price: parseFloat(formData.get("price") as string),
+    sale_price: formData.get("sale_price")
+      ? parseFloat(formData.get("sale_price") as string)
+      : null,
+    category_id: formData.get("category_id") as string,
+    skill_level: formData.get("skill_level") as "Beginner" | "Easy" | "Intermediate" | "Advanced",
+    pages_count: parseInt(formData.get("pages_count") as string) || 0,
+    is_featured: formData.get("is_featured") === "on",
+    is_bestseller: formData.get("is_bestseller") === "on",
+    is_new: formData.get("is_new") === "on",
+    is_active: formData.get("is_active") === "on",
+  }).eq("id", id);
+
+  if (error) throw new Error(error.message);
+
+  const file = formData.get("file") as File | null;
+  if (file && file.size > 0) {
+    const { data: product } = await admin.from("products").select("slug").eq("id", id).single();
+    if (product) {
+      const path = `patterns/${product.slug}.pdf`;
+      const { error: uploadError } = await admin.storage.from("pattern-files").upload(path, file, {
+        upsert: true,
+      });
+      if (uploadError) throw new Error(uploadError.message);
+      await admin.from("products").update({ file_url: path }).eq("id", id);
+    }
   }
 
   revalidatePath("/admin/products");
   revalidatePath(`/admin/products/${id}`);
   redirect("/admin/products");
+}
+
+export async function deleteProduct(id: string) {
+  if (isDemoMode()) return { success: true };
+
+  const admin = await getAdminDb();
+  const { error } = await admin.from("products").update({ is_active: false }).eq("id", id);
+  if (error) throw new Error(error.message);
+  revalidatePath("/admin/products");
+  return { success: true };
+}
+
+export async function getAdminCoupons(): Promise<Coupon[]> {
+  if (isDemoMode()) {
+    const { MOCK_COUPONS } = await import("@/lib/data/mock-data");
+    return MOCK_COUPONS;
+  }
+
+  const admin = await getAdminDb();
+  const { data, error } = await admin
+    .from("coupons")
+    .select("*")
+    .order("created_at", { ascending: false });
+
+  if (error) throw new Error(error.message);
+  return (data as Coupon[]) ?? [];
 }
 
 export async function createCoupon(formData: FormData) {
@@ -84,7 +128,7 @@ export async function createCoupon(formData: FormData) {
     return { success: true };
   }
 
-  const admin = await createAdminClient();
+  const admin = await getAdminDb();
 
   const { error } = await admin.from("coupons").insert({
     code: (formData.get("code") as string).toUpperCase(),
@@ -94,27 +138,55 @@ export async function createCoupon(formData: FormData) {
       ? parseFloat(formData.get("min_order_amount") as string)
       : 0,
     is_active: true,
-    expires_at: formData.get("expires_at") as string || null,
+    expires_at: (formData.get("expires_at") as string) || null,
     max_uses: formData.get("max_uses")
       ? parseInt(formData.get("max_uses") as string)
       : null,
   });
 
-  if (error) throw error;
+  if (error) throw new Error(error.message);
   revalidatePath("/admin/coupons");
+  return { success: true };
+}
+
+export async function toggleCoupon(id: string, isActive: boolean) {
+  if (isDemoMode()) return { success: true };
+
+  const admin = await getAdminDb();
+  const { error } = await admin.from("coupons").update({ is_active: isActive }).eq("id", id);
+  if (error) throw new Error(error.message);
+  revalidatePath("/admin/coupons");
+  return { success: true };
+}
+
+export async function updateOrderStatus(id: string, status: "Processing" | "Completed" | "Cancelled" | "Refunded") {
+  if (isDemoMode()) return { success: true };
+
+  const admin = await getAdminDb();
+  const { error } = await admin.from("orders").update({ status }).eq("id", id);
+  if (error) throw new Error(error.message);
+  revalidatePath("/admin/orders");
+  revalidatePath(`/admin/orders/${id}`);
+  return { success: true };
 }
 
 export async function grantDownloadAccess(userId: string, productId: string, orderId: string) {
-  const admin = await createAdminClient();
+  if (isDemoMode()) return { success: true };
 
-  const { error } = await admin.from("downloads").upsert({
-    user_id: userId,
-    product_id: productId,
-    order_id: orderId,
-    download_count: 0,
-  });
+  const admin = await getAdminDb();
+  const { error } = await admin.from("downloads").upsert(
+    {
+      user_id: userId,
+      product_id: productId,
+      order_id: orderId,
+      download_count: 0,
+    },
+    { onConflict: "user_id,product_id,order_id" }
+  );
 
-  if (error) throw error;
+  if (error) throw new Error(error.message);
+  revalidatePath(`/admin/orders/${orderId}`);
+  return { success: true };
 }
 
 export async function getAdminStats() {
@@ -131,15 +203,16 @@ export async function getAdminStats() {
     };
   }
 
-  const admin = await createAdminClient();
+  const admin = await getAdminDb();
 
   const [orders, products, downloads] = await Promise.all([
-    admin.from("orders").select("total_amount").eq("status", "Completed"),
+    admin.from("orders").select("total_amount, status"),
     admin.from("products").select("id", { count: "exact" }).eq("is_active", true),
     admin.from("downloads").select("id", { count: "exact" }),
   ]);
 
-  const revenue = orders.data?.reduce((sum, o) => sum + Number(o.total_amount), 0) ?? 0;
+  const completed = orders.data?.filter((o) => o.status === "Completed") ?? [];
+  const revenue = completed.reduce((sum, o) => sum + Number(o.total_amount), 0);
 
   return {
     revenue,
@@ -172,12 +245,13 @@ export async function getAdminOrders(): Promise<AdminOrderRow[]> {
     }));
   }
 
-  const admin = await createAdminClient();
-  const { data: orders } = await admin
+  const admin = await getAdminDb();
+  const { data: orders, error } = await admin
     .from("orders")
     .select("id, created_at, total_amount, status, user_id")
     .order("created_at", { ascending: false });
 
+  if (error) throw new Error(error.message);
   if (!orders?.length) return [];
 
   const userIds = [...new Set(orders.map((o) => o.user_id))];
@@ -216,12 +290,13 @@ export async function getAdminCustomers(): Promise<AdminCustomerRow[]> {
     return MOCK_CUSTOMERS;
   }
 
-  const admin = await createAdminClient();
-  const { data: profiles } = await admin
+  const admin = await getAdminDb();
+  const { data: profiles, error } = await admin
     .from("profiles")
     .select("id, full_name, email, created_at")
     .order("created_at", { ascending: false });
 
+  if (error) throw new Error(error.message);
   if (!profiles?.length) return [];
 
   const { data: orders } = await admin
@@ -257,17 +332,17 @@ export async function getAdminOrderById(id: string) {
     const order = await getOrderById(id);
     if (!order) return null;
     const { MOCK_CUSTOMERS } = await import("@/lib/data/mock-account");
-    return { order, customer: MOCK_CUSTOMERS[0] };
+    return { order, customer: MOCK_CUSTOMERS[0], userId: "demo-user" };
   }
 
-  const admin = await createAdminClient();
-  const { data: order } = await admin
+  const admin = await getAdminDb();
+  const { data: order, error } = await admin
     .from("orders")
     .select("*, order_items(*, product:products(*))")
     .eq("id", id)
     .single();
 
-  if (!order) return null;
+  if (error || !order) return null;
 
   const { data: profile } = await admin
     .from("profiles")
@@ -294,5 +369,6 @@ export async function getAdminOrderById(id: string) {
       name: profile?.full_name ?? "Customer",
       email: profile?.email ?? "",
     },
+    userId: order.user_id as string,
   };
 }

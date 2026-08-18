@@ -7,6 +7,7 @@ import { useCartStore } from "@/lib/store/cart-store";
 import { useWishlistStore } from "@/lib/store/wishlist-store";
 import { useMounted } from "@/hooks/use-mounted";
 import { createCheckoutSession } from "@/app/actions/checkout";
+import { addToWishlist, removeFromWishlist } from "@/app/actions/wishlist";
 import {
   getDemoSuccessPath,
   isClientDemoMode,
@@ -30,7 +31,7 @@ export function ProductActions({ product }: { product: Product }) {
     addToCart(product);
 
     try {
-      if (isDemo || isFree) {
+      if (isDemo) {
         router.push(getDemoSuccessPath());
         return;
       }
@@ -41,8 +42,23 @@ export function ProductActions({ product }: { product: Product }) {
       }
     } catch (error) {
       if (isNextRedirectError(error)) throw error;
-      toast.error("Please sign in to purchase");
+      toast.error(error instanceof Error ? error.message : "Please sign in to purchase");
       router.push("/auth/login?redirect=/cart");
+    }
+  }
+
+  async function handleWishlist() {
+    toggleItem(product);
+    if (isDemo) return;
+
+    try {
+      if (inWishlist) {
+        await removeFromWishlist(product.id);
+      } else {
+        await addToWishlist(product.id);
+      }
+    } catch {
+      toast.error("Sign in to save items to your wishlist");
     }
   }
 
@@ -68,7 +84,7 @@ export function ProductActions({ product }: { product: Product }) {
           </>
         )}
       </Button>
-      <Button variant="outline" className="gap-2" onClick={() => toggleItem(product)}>
+      <Button variant="outline" className="gap-2" onClick={handleWishlist}>
         <Heart className={cn("h-4 w-4", inWishlist && "fill-red-500 text-red-500")} />
         {inWishlist ? "In Wishlist" : "Add to Wishlist"}
       </Button>

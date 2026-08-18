@@ -1,46 +1,31 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Plus } from "lucide-react";
-import { MOCK_ADDRESSES, type MockAddress } from "@/lib/data/mock-account";
+import { createAddress, deleteAddress } from "@/app/actions/addresses";
+import type { Address } from "@/app/actions/addresses";
 import { toast } from "sonner";
 
-export function AddressesManager() {
-  const [addresses, setAddresses] = useState<MockAddress[]>(MOCK_ADDRESSES);
+export function AddressesManager({ initialAddresses }: { initialAddresses: Address[] }) {
+  const router = useRouter();
   const [showForm, setShowForm] = useState(false);
   const [filter, setFilter] = useState<"all" | "shipping" | "billing">("all");
 
-  const filtered = addresses.filter((a) => filter === "all" || a.type === filter);
+  const filtered = initialAddresses.filter((a) => filter === "all" || a.type === filter);
 
-  function handleDelete(id: string) {
-    setAddresses((prev) => prev.filter((a) => a.id !== id));
-    toast.success("Address removed");
-  }
-
-  function handleAdd(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const fd = new FormData(e.currentTarget);
-    const newAddress: MockAddress = {
-      id: String(Date.now()),
-      type: (fd.get("type") as "shipping" | "billing") || "shipping",
-      full_name: fd.get("full_name") as string,
-      address_line1: fd.get("address_line1") as string,
-      address_line2: (fd.get("address_line2") as string) || null,
-      city: fd.get("city") as string,
-      state: fd.get("state") as string,
-      postal_code: fd.get("postal_code") as string,
-      country: fd.get("country") as string,
-      phone: fd.get("phone") as string,
-      is_default: fd.get("is_default") === "on",
-    };
-    setAddresses((prev) => [...prev, newAddress]);
-    setShowForm(false);
-    toast.success("Address added");
-    e.currentTarget.reset();
+  async function handleDelete(id: string) {
+    try {
+      await deleteAddress(id);
+      toast.success("Address removed");
+      router.refresh();
+    } catch {
+      toast.error("Failed to remove address");
+    }
   }
 
   return (
@@ -70,7 +55,19 @@ export function AddressesManager() {
       {showForm && (
         <Card className="mb-6">
           <CardContent className="p-6">
-            <form onSubmit={handleAdd} className="grid md:grid-cols-2 gap-4">
+            <form
+              action={async (fd) => {
+                try {
+                  await createAddress(fd);
+                  toast.success("Address added");
+                  setShowForm(false);
+                  router.refresh();
+                } catch {
+                  toast.error("Failed to add address");
+                }
+              }}
+              className="grid md:grid-cols-2 gap-4"
+            >
               <Input name="full_name" required placeholder="Full name" />
               <select name="type" className="h-10 rounded-lg border border-input px-3 text-sm">
                 <option value="shipping">Shipping</option>
@@ -97,34 +94,38 @@ export function AddressesManager() {
         </Card>
       )}
 
-      <div className="grid md:grid-cols-2 gap-4">
-        {filtered.map((addr) => (
-          <Card key={addr.id}>
-            <CardContent className="p-6">
-              <div className="flex items-start justify-between mb-3">
-                <span className="text-xs font-semibold uppercase text-muted-foreground">{addr.type}</span>
-                {addr.is_default && <Badge variant="success">Default</Badge>}
-              </div>
-              <p className="font-medium">{addr.full_name}</p>
-              <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
-                {addr.address_line1}
-                {addr.address_line2 && `, ${addr.address_line2}`}
-                <br />
-                {addr.city}, {addr.state} {addr.postal_code}
-                <br />
-                {addr.country}
-                <br />
-                {addr.phone}
-              </p>
-              <div className="flex gap-2 mt-4">
-                <Button variant="ghost" size="sm" className="text-red-600" onClick={() => handleDelete(addr.id)}>
-                  Delete
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      {filtered.length === 0 ? (
+        <p className="text-muted-foreground">No addresses saved yet.</p>
+      ) : (
+        <div className="grid md:grid-cols-2 gap-4">
+          {filtered.map((addr) => (
+            <Card key={addr.id}>
+              <CardContent className="p-6">
+                <div className="flex items-start justify-between mb-3">
+                  <span className="text-xs font-semibold uppercase text-muted-foreground">{addr.type}</span>
+                  {addr.is_default && <Badge variant="success">Default</Badge>}
+                </div>
+                <p className="font-medium">{addr.full_name}</p>
+                <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
+                  {addr.address_line1}
+                  {addr.address_line2 && `, ${addr.address_line2}`}
+                  <br />
+                  {addr.city}, {addr.state} {addr.postal_code}
+                  <br />
+                  {addr.country}
+                  <br />
+                  {addr.phone}
+                </p>
+                <div className="flex gap-2 mt-4">
+                  <Button variant="ghost" size="sm" className="text-red-600" onClick={() => handleDelete(addr.id)}>
+                    Delete
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
     </>
   );
 }

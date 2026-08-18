@@ -31,8 +31,9 @@ export async function updateSession(request: NextRequest) {
 
   const isAdminRoute = request.nextUrl.pathname.startsWith("/admin");
   const isAccountRoute = request.nextUrl.pathname.startsWith("/account");
+  const isCheckoutRoute = request.nextUrl.pathname === "/checkout";
 
-  if ((isAdminRoute || isAccountRoute) && !user) {
+  if ((isAdminRoute || isAccountRoute || isCheckoutRoute) && !user) {
     const url = request.nextUrl.clone();
     url.pathname = "/auth/login";
     url.searchParams.set("redirect", request.nextUrl.pathname);

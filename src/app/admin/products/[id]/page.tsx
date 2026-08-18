@@ -118,6 +118,13 @@ export default async function EditProductPage({
                 <input type="checkbox" name="is_new" defaultChecked={product.is_new} /> New Arrival
               </label>
             </div>
+            <div className="md:col-span-2">
+              <label className="text-sm font-medium mb-1 block">Replace Pattern PDF</label>
+              <Input name="file" type="file" accept=".pdf" />
+              {product.file_url && (
+                <p className="text-xs text-muted-foreground mt-1">Current file: {product.file_url}</p>
+              )}
+            </div>
             <div className="md:col-span-2 flex gap-3">
               <Button type="submit">Save Changes</Button>
               <Link href="/admin/products">

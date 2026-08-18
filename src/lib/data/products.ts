@@ -29,7 +29,20 @@ export async function getProducts(): Promise<Product[]> {
     .select("*, category:categories(*)")
     .eq("is_active", true)
     .order("created_at", { ascending: false });
-  return (data as Product[]) ?? MOCK_PRODUCTS;
+  return (data as Product[]) ?? [];
+}
+
+export async function getAdminProducts(): Promise<Product[]> {
+  if (useMockData()) return MOCK_PRODUCTS;
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("products")
+    .select("*, category:categories(*)")
+    .order("created_at", { ascending: false });
+
+  if (error) throw error;
+  return (data as Product[]) ?? [];
 }
 
 export async function getFeaturedProducts(): Promise<Product[]> {

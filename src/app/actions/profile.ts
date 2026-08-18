@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { isDemoMode } from "@/lib/demo-mode";
+import { requireUser } from "@/lib/auth-helpers";
 import {
   MOCK_PROFILE,
   MOCK_ORDERS,
@@ -22,25 +23,26 @@ export type OrderWithProducts = {
   products: Product[];
 };
 
+function parseDate(value: FormDataEntryValue | null): string | null {
+  const str = String(value ?? "").trim();
+  return str ? str : null;
+}
+
 export async function updateProfile(formData: FormData) {
   if (isDemoMode()) {
     revalidatePath("/account/settings");
     return { success: true };
   }
 
+  const user = await requireUser();
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) throw new Error("Not authenticated");
 
   const { error } = await supabase
     .from("profiles")
     .update({
       full_name: formData.get("full_name") as string,
       phone: formData.get("phone") as string,
-      date_of_birth: formData.get("date_of_birth") as string,
+      date_of_birth: parseDate(formData.get("date_of_birth")),
       country: formData.get("country") as string,
       language: formData.get("language") as string,
     })
@@ -73,12 +75,8 @@ export async function updateNotifications(formData: FormData) {
     return { success: true };
   }
 
+  const user = await requireUser();
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) throw new Error("Not authenticated");
 
   const { error } = await supabase
     .from("profiles")
@@ -100,12 +98,8 @@ export async function updateNewsletter(formData: FormData) {
     return { success: true };
   }
 
+  const user = await requireUser();
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) throw new Error("Not authenticated");
 
   const { error } = await supabase
     .from("profiles")
@@ -128,7 +122,7 @@ export async function getProfile(): Promise<Profile | null> {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) return MOCK_PROFILE as Profile;
+  if (!user) return null;
 
   const { data } = await supabase
     .from("profiles")
@@ -136,7 +130,7 @@ export async function getProfile(): Promise<Profile | null> {
     .eq("id", user.id)
     .single();
 
-  return (data as Profile | null) ?? (MOCK_PROFILE as Profile);
+  return data as Profile | null;
 }
 
 export async function getAccountStats() {
@@ -149,19 +143,8 @@ export async function getAccountStats() {
     };
   }
 
+  const user = await requireUser();
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return {
-      totalOrders: MOCK_ORDERS.length,
-      totalDownloads: 5,
-      wishlistItems: 3,
-      rewardPoints: MOCK_PROFILE.reward_points,
-    };
-  }
 
   const [orders, downloads, wishlist, profile] = await Promise.all([
     supabase.from("orders").select("id", { count: "exact" }).eq("user_id", user.id),
@@ -178,24 +161,26 @@ export async function getAccountStats() {
   };
 }
 
-export async function getRecentOrders(limit = 5) {
+export async function getRecentOrders(limit = 50) {
   if (isDemoMode()) return MOCK_ORDERS.slice(0, limit);
 
+  const user = await requireUser();
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
 
-  if (!user) return MOCK_ORDERS.slice(0, limit);
-
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("orders")
     .select("*, order_items(count)")
     .eq("user_id", user.id)
     .order("created_at", { ascending: false })
     .limit(limit);
 
-  return data ?? MOCK_ORDERS.slice(0, limit);
+  if (error) throw error;
+
+  return (data ?? []).map((order) => {
+    const items = order.order_items as { count: number }[] | undefined;
+    const itemCount = items?.[0]?.count ?? 0;
+    return { ...order, item_count: itemCount };
+  });
 }
 
 export async function getOrderById(id: string): Promise<OrderWithProducts | null> {
@@ -205,29 +190,17 @@ export async function getOrderById(id: string): Promise<OrderWithProducts | null
     return { ...order, products: getMockOrderProducts(order) };
   }
 
+  const user = await requireUser();
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
 
-  if (!user) {
-    const order = getMockOrder(id);
-    if (!order) return null;
-    return { ...order, products: getMockOrderProducts(order) };
-  }
-
-  const { data: order } = await supabase
+  const { data: order, error } = await supabase
     .from("orders")
     .select("*, order_items(*, product:products(*))")
     .eq("id", id)
     .eq("user_id", user.id)
     .single();
 
-  if (!order) {
-    const mock = getMockOrder(id);
-    if (!mock) return null;
-    return { ...mock, products: getMockOrderProducts(mock) };
-  }
+  if (error || !order) return null;
 
   const orderItems = (order.order_items ?? []) as { product?: Product }[];
   const products = orderItems
@@ -255,6 +228,17 @@ export async function subscribeNewsletter(email: string) {
     return { success: true, message: "Thanks for subscribing! Check your inbox for 10% off." };
   }
 
-  // Live mode: store in Supabase or external service
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (user) {
+    await supabase
+      .from("profiles")
+      .update({ newsletter_subscribed: true, email })
+      .eq("id", user.id);
+  }
+
   return { success: true, message: "Thanks for subscribing!" };
 }

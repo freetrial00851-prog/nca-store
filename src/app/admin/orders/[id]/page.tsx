@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { ProductImage } from "@/components/products/product-image";
+import { AdminOrderActions } from "@/components/admin/admin-order-actions";
 import { getAdminOrderById } from "@/app/actions/admin";
 import { formatPrice, formatDateTime } from "@/lib/utils";
 import { ArrowLeft } from "lucide-react";
@@ -16,7 +17,7 @@ export default async function AdminOrderDetailPage({ params }: AdminOrderDetailP
   const result = await getAdminOrderById(id);
   if (!result) notFound();
 
-  const { order, customer } = result;
+  const { order, customer, userId } = result;
 
   return (
     <div>
@@ -85,6 +86,12 @@ export default async function AdminOrderDetailPage({ params }: AdminOrderDetailP
               </div>
             ))}
           </div>
+          <AdminOrderActions
+            orderId={id}
+            userId={userId}
+            status={order.status}
+            products={order.products}
+          />
         </CardContent>
       </Card>
     </div>

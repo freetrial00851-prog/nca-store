@@ -32,7 +32,10 @@ export async function getSecureDownloadUrl(productId: string) {
     .single();
 
   if (!download?.product?.file_url) {
-    return { error: "You do not have access to this download" };
+    return {
+      error:
+        "Download not ready yet. The pattern PDF may still be uploading — contact support if this persists.",
+    };
   }
 
   const admin = await createAdminClient();
@@ -72,11 +75,7 @@ export async function getUserDownloads(): Promise<
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return getMockDownloads().map((product) => ({
-      product,
-      purchased_at: product.created_at,
-      download_count: 0,
-    }));
+    return [];
   }
 
   const { data } = await supabase

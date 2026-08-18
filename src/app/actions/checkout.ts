@@ -234,16 +234,22 @@ export async function fulfillOrder(
 
   const admin = await createAdminClient();
 
+  const paymentIntentId = session.payment_intent as string;
+  const { data: existing } = await admin
+    .from("orders")
+    .select("*")
+    .eq("payment_intent_id", paymentIntentId)
+    .maybeSingle();
+
+  if (existing) return existing as Order;
+
   const subtotal = (session.amount_subtotal ?? 0) / 100;
   const total = (session.amount_total ?? 0) / 100;
   const discount = subtotal - total;
 
-  const orderId = `NCA-${Date.now()}`;
-
   const { data: order } = await admin
     .from("orders")
     .insert({
-      id: orderId,
       user_id: userId,
       status: "Completed",
       subtotal,
@@ -251,7 +257,7 @@ export async function fulfillOrder(
       tax_amount: 0,
       total_amount: total,
       payment_method: "stripe",
-      payment_intent_id: session.payment_intent as string,
+      payment_intent_id: paymentIntentId,
       coupon_id: session.metadata?.coupon_id || null,
     })
     .select()

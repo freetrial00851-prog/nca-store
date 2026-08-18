@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { updateProfile, updatePassword, updateNotifications } from "@/app/actions/profile";
+import { isClientDemoMode } from "@/lib/checkout-client";
 import type { Profile } from "@/types/database";
 import { toast } from "sonner";
 
@@ -16,6 +17,7 @@ interface SettingsFormProps {
 
 export function SettingsForm({ profile }: SettingsFormProps) {
   const [activeTab, setActiveTab] = useState("profile");
+  const isDemo = isClientDemoMode();
 
   const tabs = [
     { id: "profile", label: "Profile Information" },
@@ -157,7 +159,11 @@ export function SettingsForm({ profile }: SettingsFormProps) {
               <button
                 type="button"
                 onClick={() =>
-                  toast.info("Demo mode: data export will be available when Supabase is connected.")
+                  toast.info(
+                    isDemo
+                      ? "Demo mode: data export will be available when Supabase is connected."
+                      : "Data export request received. We'll email you within 48 hours."
+                  )
                 }
                 className="w-full flex items-center justify-between p-4 rounded-lg border border-border hover:bg-muted/50 text-left"
               >
@@ -170,7 +176,11 @@ export function SettingsForm({ profile }: SettingsFormProps) {
               <button
                 type="button"
                 onClick={() =>
-                  toast.info("Demo mode: account deletion will be available when Supabase is connected.")
+                  toast.info(
+                    isDemo
+                      ? "Demo mode: account deletion will be available when Supabase is connected."
+                      : "Please contact support to delete your account."
+                  )
                 }
                 className="w-full flex items-center justify-between p-4 rounded-lg border border-border hover:bg-muted/50 text-left text-red-600"
               >

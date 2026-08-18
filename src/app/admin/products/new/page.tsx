@@ -66,6 +66,11 @@ export default async function NewProductPage() {
                 <input type="checkbox" name="is_new" defaultChecked /> New Arrival
               </label>
             </div>
+            <div className="md:col-span-2">
+              <label className="text-sm font-medium mb-1 block">Pattern PDF</label>
+              <Input name="file" type="file" accept=".pdf" />
+              <p className="text-xs text-muted-foreground mt-1">Upload to pattern-files storage bucket</p>
+            </div>
             <div className="md:col-span-2 flex gap-3">
               <Button type="submit">Save Pattern</Button>
               <Link href="/admin/products"><Button type="button" variant="outline">Cancel</Button></Link>
