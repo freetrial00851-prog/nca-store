@@ -8,12 +8,13 @@ import { getProductImage } from "@/lib/data/product-images";
 interface ProductGalleryProps {
   slug: string;
   title: string;
+  images?: string[];
   isNew?: boolean;
 }
 
-export function ProductGallery({ slug, title, isNew }: ProductGalleryProps) {
-  const mainImage = getProductImage(slug);
-  const thumbs = [mainImage, mainImage, mainImage, mainImage];
+export function ProductGallery({ slug, title, images, isNew }: ProductGalleryProps) {
+  const gallery =
+    images && images.length > 0 ? images : [getProductImage(slug), getProductImage(slug)];
   const [active, setActive] = useState(0);
 
   return (
@@ -25,7 +26,7 @@ export function ProductGallery({ slug, title, isNew }: ProductGalleryProps) {
           </span>
         )}
         <Image
-          src={thumbs[active]}
+          src={gallery[active] ?? gallery[0]}
           alt={title}
           fill
           sizes="(max-width: 1024px) 100vw, 50vw"
@@ -33,21 +34,23 @@ export function ProductGallery({ slug, title, isNew }: ProductGalleryProps) {
           priority
         />
       </div>
-      <div className="flex gap-2">
-        {thumbs.map((src, i) => (
-          <button
-            key={i}
-            type="button"
-            onClick={() => setActive(i)}
-            className={cn(
-              "relative h-16 w-16 rounded-lg overflow-hidden border-2 transition-colors",
-              active === i ? "border-nca-green" : "border-transparent hover:border-nca-green/40"
-            )}
-          >
-            <Image src={src} alt="" fill sizes="64px" className="object-cover" />
-          </button>
-        ))}
-      </div>
+      {gallery.length > 1 && (
+        <div className="flex gap-2">
+          {gallery.map((src, i) => (
+            <button
+              key={`${src}-${i}`}
+              type="button"
+              onClick={() => setActive(i)}
+              className={cn(
+                "relative h-16 w-16 rounded-lg overflow-hidden border-2 transition-colors",
+                active === i ? "border-nca-green" : "border-transparent hover:border-nca-green/40"
+              )}
+            >
+              <Image src={src} alt="" fill sizes="64px" className="object-cover" />
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

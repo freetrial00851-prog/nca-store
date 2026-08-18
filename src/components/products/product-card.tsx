@@ -32,7 +32,12 @@ export function ProductCard({ product, className }: ProductCardProps) {
     <div className={cn("group bg-white rounded-2xl border border-border/80 overflow-hidden hover:shadow-lg hover:border-nca-sage transition-all duration-300", className)}>
       <div className="relative aspect-square overflow-hidden bg-nca-sage/30">
         <Link href={`/products/${product.slug}`} className="block absolute inset-0">
-          <ProductImage slug={product.slug} alt={product.title} className="group-hover:scale-105 transition-transform duration-500" />
+          <ProductImage
+            slug={product.slug}
+            alt={product.title}
+            imageUrl={product.images?.[0]}
+            className="group-hover:scale-105 transition-transform duration-500"
+          />
         </Link>
         <div className="absolute top-3 left-3 flex gap-1.5 z-10">
           {product.is_new && <Badge variant="new" className="text-[10px] font-bold px-2">NEW</Badge>}

@@ -27,6 +27,7 @@ export default async function AdminProductsPage() {
                 <th className="p-4">Category</th>
                 <th className="p-4">Price</th>
                 <th className="p-4">PDF</th>
+                <th className="p-4">Images</th>
                 <th className="p-4">Status</th>
                 <th className="p-4">Actions</th>
               </tr>
@@ -42,6 +43,11 @@ export default async function AdminProductsPage() {
                   <td className="p-4">
                     <Badge variant={product.file_url ? "success" : "outline"}>
                       {product.file_url ? "Uploaded" : "Missing"}
+                    </Badge>
+                  </td>
+                  <td className="p-4">
+                    <Badge variant={product.images?.length ? "success" : "outline"}>
+                      {product.images?.length ? `${product.images.length}` : "Missing"}
                     </Badge>
                   </td>
                   <td className="p-4">

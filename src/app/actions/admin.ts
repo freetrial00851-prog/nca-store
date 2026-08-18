@@ -6,6 +6,48 @@ import { isDemoMode } from "@/lib/demo-mode";
 import { getAdminDb } from "@/lib/auth-helpers";
 import { slugify } from "@/lib/utils";
 import type { Product, Coupon } from "@/types/database";
+import type { SupabaseClient } from "@supabase/supabase-js";
+
+async function uploadPatternPdf(
+  admin: SupabaseClient,
+  slug: string,
+  file: File
+): Promise<string> {
+  const path = `patterns/${slug}.pdf`;
+  const { error } = await admin.storage.from("pattern-files").upload(path, file, {
+    upsert: true,
+    contentType: "application/pdf",
+  });
+  if (error) throw new Error(`PDF upload failed: ${error.message}`);
+  return path;
+}
+
+async function uploadProductImages(
+  admin: SupabaseClient,
+  slug: string,
+  formData: FormData,
+  existing: string[] = []
+): Promise<string[]> {
+  const entries = formData.getAll("images");
+  const uploaded: string[] = [...existing];
+
+  for (const entry of entries) {
+    if (!(entry instanceof File) || entry.size === 0) continue;
+
+    const ext = entry.name.split(".").pop()?.toLowerCase() || "jpg";
+    const path = `${slug}/${Date.now()}-${uploaded.length}.${ext}`;
+    const { error } = await admin.storage.from("product-images").upload(path, entry, {
+      upsert: true,
+      contentType: entry.type || "image/jpeg",
+    });
+    if (error) throw new Error(`Image upload failed: ${error.message}`);
+
+    const { data } = admin.storage.from("product-images").getPublicUrl(path);
+    uploaded.push(data.publicUrl);
+  }
+
+  return uploaded;
+}
 
 export async function createProduct(formData: FormData) {
   if (isDemoMode()) {
@@ -39,14 +81,20 @@ export async function createProduct(formData: FormData) {
   if (error) throw new Error(error.message);
 
   const file = formData.get("file") as File | null;
+  let fileUrl: string | null = null;
   if (file && file.size > 0 && data) {
-    const path = `patterns/${data.slug}.pdf`;
-    const { error: uploadError } = await admin.storage.from("pattern-files").upload(path, file, {
-      upsert: true,
-    });
-    if (uploadError) throw new Error(uploadError.message);
-    await admin.from("products").update({ file_url: path }).eq("id", data.id);
+    fileUrl = await uploadPatternPdf(admin, data.slug, file);
   }
+
+  const images = await uploadProductImages(admin, slug, formData);
+
+  await admin
+    .from("products")
+    .update({
+      ...(fileUrl ? { file_url: fileUrl } : {}),
+      ...(images.length ? { images } : {}),
+    })
+    .eq("id", data.id);
 
   revalidatePath("/admin/products");
   redirect("/admin/products");
@@ -78,17 +126,29 @@ export async function updateProduct(id: string, formData: FormData) {
 
   if (error) throw new Error(error.message);
 
+  const { data: current } = await admin
+    .from("products")
+    .select("slug, images")
+    .eq("id", id)
+    .single();
+
   const file = formData.get("file") as File | null;
-  if (file && file.size > 0) {
-    const { data: product } = await admin.from("products").select("slug").eq("id", id).single();
-    if (product) {
-      const path = `patterns/${product.slug}.pdf`;
-      const { error: uploadError } = await admin.storage.from("pattern-files").upload(path, file, {
-        upsert: true,
-      });
-      if (uploadError) throw new Error(uploadError.message);
-      await admin.from("products").update({ file_url: path }).eq("id", id);
-    }
+  const updates: { file_url?: string; images?: string[] } = {};
+
+  if (file && file.size > 0 && current) {
+    updates.file_url = await uploadPatternPdf(admin, current.slug, file);
+  }
+
+  const images = await uploadProductImages(
+    admin,
+    current?.slug ?? id,
+    formData,
+    (current?.images as string[]) ?? []
+  );
+  if (images.length) updates.images = images;
+
+  if (Object.keys(updates).length) {
+    await admin.from("products").update(updates).eq("id", id);
   }
 
   revalidatePath("/admin/products");

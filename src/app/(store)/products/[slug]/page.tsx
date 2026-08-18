@@ -62,7 +62,12 @@ export default async function ProductPage({ params }: ProductPageProps) {
       />
 
       <div className="grid lg:grid-cols-2 gap-10 mb-16">
-        <ProductGallery slug={product.slug} title={product.title} isNew={product.is_new} />
+        <ProductGallery
+          slug={product.slug}
+          title={product.title}
+          images={product.images}
+          isNew={product.is_new}
+        />
 
         <div>
           <Badge variant="success" className="mb-2">{product.skill_level}</Badge>

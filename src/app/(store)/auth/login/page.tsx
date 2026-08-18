@@ -30,11 +30,23 @@ function LoginForm() {
       }
 
       const supabase = createClient();
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      const { data: authData, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
-      toast.success("Welcome back!");
-      // Full navigation so auth cookies reach middleware before /account loads
-      window.location.assign(redirect);
+
+      const { data: role } = await supabase
+        .from("roles")
+        .select("role")
+        .eq("user_id", authData.user.id)
+        .maybeSingle();
+
+      toast.success(role?.role === "admin" ? "Welcome, Admin!" : "Welcome back!");
+
+      let destination = redirect;
+      if (role?.role === "admin") {
+        destination = "/admin";
+      }
+
+      window.location.assign(destination);
       return;
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Login failed");

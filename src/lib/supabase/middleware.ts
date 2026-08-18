@@ -52,5 +52,17 @@ export async function updateSession(request: NextRequest) {
     }
   }
 
+  if (isAccountRoute && user) {
+    const { data: role } = await supabase
+      .from("roles")
+      .select("role")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (role?.role === "admin") {
+      return NextResponse.redirect(new URL("/admin", request.url));
+    }
+  }
+
   return supabaseResponse;
 }
