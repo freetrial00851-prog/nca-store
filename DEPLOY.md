@@ -93,11 +93,48 @@ Find your UUID in **Authentication → Users** in Supabase.
 
 ## Step 6 — Deploy to Vercel
 
-1. Push the repo to GitHub.
-2. Import the project at [vercel.com/new](https://vercel.com/new).
-3. Add the same environment variables from `.env.local`.
-4. Set `NEXT_PUBLIC_APP_URL` to your Vercel domain (e.g. `https://nca-store.vercel.app`).
-5. Deploy.
+### Option A — One script (recommended)
+
+After logging in once:
+
+```powershell
+gh auth login
+npx vercel login
+.\scripts\deploy-live.ps1 -GitHubUser krwao
+```
+
+Replace `krwao` with your GitHub username if different.
+
+### Option B — Manual
+
+1. Push to GitHub:
+   ```powershell
+   gh auth login
+   gh repo create krwao/nca-store --public --source=. --remote=origin --push
+   ```
+   Or if the repo already exists:
+   ```powershell
+   git remote add origin https://github.com/krwao/nca-store.git
+   git push -u origin main
+   ```
+
+2. Import the repo at [vercel.com/new](https://vercel.com/new) **or** deploy from CLI:
+   ```powershell
+   npx vercel login
+   npx vercel --prod
+   ```
+
+3. In Vercel → **Settings → Environment Variables**, add:
+   - `NEXT_PUBLIC_SUPABASE_URL`
+   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+   - `SUPABASE_SERVICE_ROLE_KEY`
+   - `NEXT_PUBLIC_APP_URL` = your Vercel URL (e.g. `https://nca-store.vercel.app`)
+
+4. **Redeploy** after setting env vars.
+
+5. In Supabase → **Authentication → URL Configuration**:
+   - **Site URL** = your Vercel URL
+   - **Redirect URLs** = `https://your-app.vercel.app/**`
 
 After deploy, update Supabase **Site URL** and **Redirect URLs** to match your Vercel domain.
 
