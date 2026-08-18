@@ -35,7 +35,8 @@ export default function SignupPage() {
       });
       if (error) throw error;
       toast.success("Account created! Check your email to confirm.");
-      router.push("/account");
+      window.location.assign("/account");
+      return;
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Signup failed");
     } finally {

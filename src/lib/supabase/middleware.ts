@@ -44,7 +44,7 @@ export async function updateSession(request: NextRequest) {
       .from("roles")
       .select("role")
       .eq("user_id", user.id)
-      .single();
+      .maybeSingle();
 
     if (role?.role !== "admin") {
       return NextResponse.redirect(new URL("/", request.url));

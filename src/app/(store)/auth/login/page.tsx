@@ -33,8 +33,9 @@ function LoginForm() {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
       toast.success("Welcome back!");
-      router.push(redirect);
-      router.refresh();
+      // Full navigation so auth cookies reach middleware before /account loads
+      window.location.assign(redirect);
+      return;
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Login failed");
     } finally {
