@@ -1,26 +1,64 @@
 @import "tailwindcss";
-
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+@import "tw-animate-css";
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-nca-green: #2D4A3E;
+  --color-nca-green-dark: #23392E;
+  --color-nca-sage: #E8EFE9;
+  --color-nca-cream: #FAF8F5;
+  --color-nca-charcoal: #1A1A1A;
+  --color-nca-gray: #666666;
+  --color-nca-gold: #F59E0B;
+  --font-sans: var(--font-inter);
+  --font-serif: var(--font-playfair);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+:root {
+  --radius: 0.625rem;
+  --background: #FAF8F5;
+  --foreground: #1A1A1A;
+  --card: #FFFFFF;
+  --card-foreground: #1A1A1A;
+  --primary: #2D4A3E;
+  --primary-foreground: #FFFFFF;
+  --secondary: #E8EFE9;
+  --secondary-foreground: #2D4A3E;
+  --muted: #F5F3F0;
+  --muted-foreground: #666666;
+  --accent: #E8EFE9;
+  --accent-foreground: #2D4A3E;
+  --destructive: #DC2626;
+  --border: #E5E0DB;
+  --input: #E5E0DB;
+  --ring: #2D4A3E;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans), system-ui, sans-serif;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-serif), Georgia, serif;
 }

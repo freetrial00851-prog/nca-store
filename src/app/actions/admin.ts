@@ -1,0 +1,298 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
+import { createAdminClient } from "@/lib/supabase/server";
+import { isDemoMode } from "@/lib/demo-mode";
+import { slugify } from "@/lib/utils";
+import type { Product } from "@/types/database";
+export async function createProduct(formData: FormData) {
+  const title = formData.get("title") as string;
+  const slug = slugify(title);
+
+  try {
+    const admin = await createAdminClient();
+
+    const { data, error } = await admin.from("products").insert({
+      title,
+      slug,
+      description: formData.get("description") as string,
+      price: parseFloat(formData.get("price") as string),
+      sale_price: formData.get("sale_price")
+        ? parseFloat(formData.get("sale_price") as string)
+        : null,
+      category_id: formData.get("category_id") as string,
+      skill_level: formData.get("skill_level") as "Beginner" | "Easy" | "Intermediate" | "Advanced",
+      language: "English",
+      pages_count: parseInt(formData.get("pages_count") as string) || 0,
+      format: "PDF",
+      is_featured: formData.get("is_featured") === "on",
+      is_bestseller: formData.get("is_bestseller") === "on",
+      is_new: formData.get("is_new") === "on",
+      is_active: true,
+    }).select().single();
+
+    if (error) throw error;
+
+    const file = formData.get("file") as File | null;
+    if (file && file.size > 0 && data) {
+      const path = `patterns/${data.slug}.pdf`;
+      await admin.storage.from("pattern-files").upload(path, file);
+      await admin.from("products").update({ file_url: path }).eq("id", data.id);
+    }
+  } catch {
+    // Demo mode without Supabase — still redirect
+  }
+
+  revalidatePath("/admin/products");
+  redirect("/admin/products");
+}
+
+export async function updateProduct(id: string, formData: FormData) {
+  try {
+    const admin = await createAdminClient();
+
+    const { error } = await admin.from("products").update({
+      title: formData.get("title") as string,
+      description: formData.get("description") as string,
+      price: parseFloat(formData.get("price") as string),
+      sale_price: formData.get("sale_price")
+        ? parseFloat(formData.get("sale_price") as string)
+        : null,
+      category_id: formData.get("category_id") as string,
+      skill_level: formData.get("skill_level") as "Beginner" | "Easy" | "Intermediate" | "Advanced",
+      pages_count: parseInt(formData.get("pages_count") as string) || 0,
+      is_featured: formData.get("is_featured") === "on",
+      is_bestseller: formData.get("is_bestseller") === "on",
+      is_new: formData.get("is_new") === "on",
+      is_active: formData.get("is_active") === "on",
+    }).eq("id", id);
+
+    if (error) throw error;
+  } catch {
+    // Demo mode without Supabase
+  }
+
+  revalidatePath("/admin/products");
+  revalidatePath(`/admin/products/${id}`);
+  redirect("/admin/products");
+}
+
+export async function createCoupon(formData: FormData) {
+  if (isDemoMode()) {
+    revalidatePath("/admin/coupons");
+    return { success: true };
+  }
+
+  const admin = await createAdminClient();
+
+  const { error } = await admin.from("coupons").insert({
+    code: (formData.get("code") as string).toUpperCase(),
+    discount_type: formData.get("discount_type") as "percentage" | "fixed",
+    value: parseFloat(formData.get("value") as string),
+    min_order_amount: formData.get("min_order_amount")
+      ? parseFloat(formData.get("min_order_amount") as string)
+      : 0,
+    is_active: true,
+    expires_at: formData.get("expires_at") as string || null,
+    max_uses: formData.get("max_uses")
+      ? parseInt(formData.get("max_uses") as string)
+      : null,
+  });
+
+  if (error) throw error;
+  revalidatePath("/admin/coupons");
+}
+
+export async function grantDownloadAccess(userId: string, productId: string, orderId: string) {
+  const admin = await createAdminClient();
+
+  const { error } = await admin.from("downloads").upsert({
+    user_id: userId,
+    product_id: productId,
+    order_id: orderId,
+    download_count: 0,
+  });
+
+  if (error) throw error;
+}
+
+export async function getAdminStats() {
+  if (isDemoMode()) {
+    const { MOCK_ORDERS } = await import("@/lib/data/mock-account");
+    const { getProducts } = await import("@/lib/data/products");
+    const products = await getProducts();
+    const revenue = MOCK_ORDERS.reduce((sum, o) => sum + o.total_amount, 0);
+    return {
+      revenue,
+      orderCount: MOCK_ORDERS.length,
+      productCount: products.length,
+      downloadCount: 28,
+    };
+  }
+
+  const admin = await createAdminClient();
+
+  const [orders, products, downloads] = await Promise.all([
+    admin.from("orders").select("total_amount").eq("status", "Completed"),
+    admin.from("products").select("id", { count: "exact" }).eq("is_active", true),
+    admin.from("downloads").select("id", { count: "exact" }),
+  ]);
+
+  const revenue = orders.data?.reduce((sum, o) => sum + Number(o.total_amount), 0) ?? 0;
+
+  return {
+    revenue,
+    orderCount: orders.data?.length ?? 0,
+    productCount: products.count ?? 0,
+    downloadCount: downloads.count ?? 0,
+  };
+}
+
+export interface AdminOrderRow {
+  id: string;
+  created_at: string;
+  total_amount: number;
+  status: string;
+  customer_name: string;
+  customer_email: string;
+}
+
+export async function getAdminOrders(): Promise<AdminOrderRow[]> {
+  if (isDemoMode()) {
+    const { MOCK_ORDERS, MOCK_CUSTOMERS } = await import("@/lib/data/mock-account");
+    const customer = MOCK_CUSTOMERS[0];
+    return MOCK_ORDERS.map((order) => ({
+      id: order.id,
+      created_at: order.created_at,
+      total_amount: order.total_amount,
+      status: order.status,
+      customer_name: customer.name,
+      customer_email: customer.email,
+    }));
+  }
+
+  const admin = await createAdminClient();
+  const { data: orders } = await admin
+    .from("orders")
+    .select("id, created_at, total_amount, status, user_id")
+    .order("created_at", { ascending: false });
+
+  if (!orders?.length) return [];
+
+  const userIds = [...new Set(orders.map((o) => o.user_id))];
+  const { data: profiles } = await admin
+    .from("profiles")
+    .select("id, full_name, email")
+    .in("id", userIds);
+
+  const profileMap = new Map(profiles?.map((p) => [p.id, p]) ?? []);
+
+  return orders.map((order) => {
+    const profile = profileMap.get(order.user_id);
+    return {
+      id: order.id,
+      created_at: order.created_at,
+      total_amount: Number(order.total_amount),
+      status: order.status,
+      customer_name: profile?.full_name ?? "Customer",
+      customer_email: profile?.email ?? "",
+    };
+  });
+}
+
+export interface AdminCustomerRow {
+  id: string;
+  name: string;
+  email: string;
+  orders: number;
+  spent: number;
+  joined: string;
+}
+
+export async function getAdminCustomers(): Promise<AdminCustomerRow[]> {
+  if (isDemoMode()) {
+    const { MOCK_CUSTOMERS } = await import("@/lib/data/mock-account");
+    return MOCK_CUSTOMERS;
+  }
+
+  const admin = await createAdminClient();
+  const { data: profiles } = await admin
+    .from("profiles")
+    .select("id, full_name, email, created_at")
+    .order("created_at", { ascending: false });
+
+  if (!profiles?.length) return [];
+
+  const { data: orders } = await admin
+    .from("orders")
+    .select("user_id, total_amount")
+    .eq("status", "Completed");
+
+  const stats = new Map<string, { count: number; spent: number }>();
+  for (const order of orders ?? []) {
+    const current = stats.get(order.user_id) ?? { count: 0, spent: 0 };
+    stats.set(order.user_id, {
+      count: current.count + 1,
+      spent: current.spent + Number(order.total_amount),
+    });
+  }
+
+  return profiles.map((profile) => {
+    const orderStats = stats.get(profile.id) ?? { count: 0, spent: 0 };
+    return {
+      id: profile.id,
+      name: profile.full_name ?? "Customer",
+      email: profile.email ?? "",
+      orders: orderStats.count,
+      spent: orderStats.spent,
+      joined: profile.created_at,
+    };
+  });
+}
+
+export async function getAdminOrderById(id: string) {
+  if (isDemoMode()) {
+    const { getOrderById } = await import("@/app/actions/profile");
+    const order = await getOrderById(id);
+    if (!order) return null;
+    const { MOCK_CUSTOMERS } = await import("@/lib/data/mock-account");
+    return { order, customer: MOCK_CUSTOMERS[0] };
+  }
+
+  const admin = await createAdminClient();
+  const { data: order } = await admin
+    .from("orders")
+    .select("*, order_items(*, product:products(*))")
+    .eq("id", id)
+    .single();
+
+  if (!order) return null;
+
+  const { data: profile } = await admin
+    .from("profiles")
+    .select("full_name, email")
+    .eq("id", order.user_id)
+    .single();
+
+  const orderItems = (order.order_items ?? []) as { product?: Product }[];
+  const products = orderItems
+    .map((item) => item.product)
+    .filter((p): p is Product => Boolean(p));
+
+  return {
+    order: {
+      id: order.id,
+      status: order.status,
+      total_amount: Number(order.total_amount),
+      subtotal: Number(order.subtotal),
+      discount_amount: Number(order.discount_amount),
+      created_at: order.created_at,
+      products,
+    },
+    customer: {
+      name: profile?.full_name ?? "Customer",
+      email: profile?.email ?? "",
+    },
+  };
+}
