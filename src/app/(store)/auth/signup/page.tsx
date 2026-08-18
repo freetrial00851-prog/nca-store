@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { createClient } from "@/lib/supabase/client";
@@ -10,7 +9,6 @@ import { isClientDemoMode } from "@/lib/checkout-client";
 import { toast } from "sonner";
 
 export default function SignupPage() {
-  const router = useRouter();
   const isDemo = isClientDemoMode();
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
@@ -23,7 +21,7 @@ export default function SignupPage() {
     try {
       if (isDemo) {
         toast.success("Demo account created — welcome to NCA!");
-        router.push("/account");
+        window.location.assign("/");
         return;
       }
 
@@ -35,7 +33,7 @@ export default function SignupPage() {
       });
       if (error) throw error;
       toast.success("Account created! Check your email to confirm.");
-      window.location.assign("/account");
+      window.location.assign("/");
       return;
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Signup failed");
