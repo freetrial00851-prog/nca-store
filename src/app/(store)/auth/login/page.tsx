@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useEffect } from "react";
+import { useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,8 +11,9 @@ import {
   sanitizeReturnTo,
   saveAuthIntent,
 } from "@/lib/auth-intent";
-import { loginFormAction } from "@/app/actions/auth";
-import { isClientDemoMode } from "@/lib/checkout-client";
+import { loginAction } from "@/app/actions/auth";
+import { sanitizeLoginError } from "@/lib/auth-errors";
+import { isClientDemoMode, redirectHard } from "@/lib/checkout-client";
 import { toast } from "sonner";
 import { Suspense, useState } from "react";
 
@@ -23,8 +24,9 @@ function LoginForm() {
     searchParams.get("redirect") ?? searchParams.get("returnTo")
   );
   const isDemo = isClientDemoMode();
-  const [state, formAction, pending] = useActionState(loginFormAction, {});
-  const [demoEmail] = useState(isDemo ? "sarah@example.com" : "");
+  const [email] = useState(isDemo ? "sarah@example.com" : "");
+  const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
 
   useEffect(() => {
     const error = searchParams.get("error");
@@ -42,6 +44,27 @@ function LoginForm() {
       saveAuthIntent({ returnTo: redirect });
     }
   }, [intentFromUrl, redirect]);
+
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setPending(true);
+    setError(null);
+
+    if (isDemo) {
+      window.location.assign(redirect);
+      return;
+    }
+
+    const formData = new FormData(e.currentTarget);
+
+    try {
+      await loginAction(formData);
+    } catch (err) {
+      if (redirectHard(err)) return;
+      setError(sanitizeLoginError(err instanceof Error ? err.message : "Unable to sign in."));
+      setPending(false);
+    }
+  }
 
   async function handleDemoSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -71,15 +94,14 @@ function LoginForm() {
           </p>
         )}
 
-        {state.error && (
+        {error && (
           <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2 mb-4">
-            {state.error}
+            {error}
           </p>
         )}
 
         <form
-          action={isDemo ? undefined : formAction}
-          onSubmit={isDemo ? handleDemoSubmit : undefined}
+          onSubmit={isDemo ? handleDemoSubmit : handleSubmit}
           className="space-y-4"
         >
           <input type="hidden" name="redirect" value={redirect} />
@@ -95,7 +117,7 @@ function LoginForm() {
               type="email"
               name="email"
               required
-              defaultValue={demoEmail}
+              defaultValue={email}
               autoComplete="email"
             />
           </div>

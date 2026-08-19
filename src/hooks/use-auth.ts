@@ -10,9 +10,12 @@ import { isClientDemoMode } from "@/lib/checkout-client";
 import { toast } from "sonner";
 import type { Product } from "@/types/database";
 
-export function useAuthSession() {
-  const [user, setUser] = useState<{ id: string; email?: string } | null>(null);
-  const [loading, setLoading] = useState(true);
+export type AuthSessionUser = { id: string; email?: string } | null;
+
+export function useAuthSession(initialUser?: AuthSessionUser) {
+  const seededFromServer = initialUser !== undefined;
+  const [user, setUser] = useState<AuthSessionUser>(initialUser ?? null);
+  const [loading, setLoading] = useState(!seededFromServer);
 
   useEffect(() => {
     if (isClientDemoMode()) {
@@ -22,8 +25,10 @@ export function useAuthSession() {
 
     const supabase = createClient();
 
-    supabase.auth.getUser().then(({ data }) => {
+    supabase.auth.getUser().then(({ data, error }) => {
       setUser(data.user ? { id: data.user.id, email: data.user.email } : null);
+      setLoading(false);
+    }).catch(() => {
       setLoading(false);
     });
 

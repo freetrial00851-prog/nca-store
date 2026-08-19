@@ -7,7 +7,7 @@ import { Heart, User, ShoppingBag, Menu, LayoutGrid, X } from "lucide-react";
 import { useCartStore } from "@/lib/store/cart-store";
 import { useWishlistStore } from "@/lib/store/wishlist-store";
 import { cn } from "@/lib/utils";
-import { useAuthSession } from "@/hooks/use-auth";
+import { useAuthSession, type AuthSessionUser } from "@/hooks/use-auth";
 import { buildAuthLoginUrl } from "@/lib/auth-intent";
 import { useMounted } from "@/hooks/use-mounted";
 
@@ -84,10 +84,10 @@ function CartIconAction({
   );
 }
 
-export function Header() {
+export function Header({ initialUser }: { initialUser?: AuthSessionUser }) {
   const pathname = usePathname();
   const mounted = useMounted();
-  const { user, loading: authLoading, isAuthenticated } = useAuthSession();
+  const { user, loading: authLoading, isAuthenticated } = useAuthSession(initialUser);
   const [menuOpen, setMenuOpen] = useState(false);
   const [categoriesOpen, setCategoriesOpen] = useState(false);
   const cartCount = useCartStore((s) => s.getItemCount());
@@ -134,7 +134,7 @@ export function Header() {
 
             <div className="flex items-center gap-1 shrink-0">
               <IconAction href="/account/wishlist" icon={Heart} label="Wishlist" count={displayWishlistCount} />
-              {mounted && !authLoading && isAuthenticated ? (
+              {!authLoading && isAuthenticated ? (
                 <IconAction href="/account" icon={User} label="Account" />
               ) : (
                 <IconAction

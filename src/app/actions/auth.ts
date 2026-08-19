@@ -1,6 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { isDemoMode, isSupabaseConfigured } from "@/lib/demo-mode";
 import { buildAuthCallbackUrl, resolvePostAuthDestination, sanitizeReturnTo } from "@/lib/auth-intent";
@@ -67,6 +68,7 @@ export async function loginAction(formData: FormData) {
   }
 
   const destination = resolvePostAuthDestination(redirectTo, isAdmin);
+  revalidatePath("/", "layout");
   redirect(destination);
 }
 
@@ -211,5 +213,6 @@ export async function logout() {
     await supabase.auth.signOut();
   }
 
+  revalidatePath("/", "layout");
   redirect("/");
 }

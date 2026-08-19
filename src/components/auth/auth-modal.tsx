@@ -16,7 +16,7 @@ import {
 } from "@/lib/auth-intent";
 import { sanitizeAuthError, sanitizeLoginError } from "@/lib/auth-errors";
 import { EmailConfirmationPanel } from "@/components/auth/email-confirmation-panel";
-import { isClientDemoMode, isNextRedirectError } from "@/lib/checkout-client";
+import { isClientDemoMode, redirectHard } from "@/lib/checkout-client";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 
@@ -92,7 +92,7 @@ export function AuthModal() {
       closeAuthModal();
       await loginAction(formData);
     } catch (err) {
-      if (isNextRedirectError(err)) throw err;
+      if (redirectHard(err)) return;
       toast.error(sanitizeLoginError(err instanceof Error ? err.message : "Unable to sign in"));
       setLoading(false);
     }
