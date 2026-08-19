@@ -16,6 +16,7 @@ import { HeroSearch } from "@/components/home/hero-search";
 import { SkillLevelSection } from "@/components/home/skill-level-section";
 import { getFeaturedProducts, getBestsellers, getCategories, getProducts } from "@/lib/data/products";
 import { getCategoryImage, HERO_IMAGE } from "@/lib/data/product-images";
+import { getSiteSetting } from "@/app/actions/site-settings";
 
 const benefits = [
   { icon: Download, title: "Instant Download", desc: "Get your pattern immediately after purchase" },
@@ -33,12 +34,14 @@ const testimonials = [
 ];
 
 export default async function HomePage() {
-  const [featured, bestsellers, categories, allProducts] = await Promise.all([
+  const [featured, bestsellers, categories, allProducts, customHeroImage] = await Promise.all([
     getFeaturedProducts(),
     getBestsellers(),
     getCategories(),
     getProducts(),
+    getSiteSetting("hero_image_url"),
   ]);
+  const heroImage = customHeroImage ?? HERO_IMAGE;
 
   const categoryCounts = Object.fromEntries(
     categories.map((cat) => [
@@ -78,7 +81,7 @@ export default async function HomePage() {
             <div className="relative hidden lg:flex justify-center">
               <div className="relative w-80 h-80 xl:w-96 xl:h-96">
                 <div className="absolute inset-0 rounded-full overflow-hidden border-8 border-white shadow-2xl">
-                  <Image src={HERO_IMAGE} alt="Crochet maker" fill className="object-cover" priority />
+                  <Image src={heroImage} alt="Crochet maker" fill className="object-cover" priority />
                 </div>
                 <div className="absolute -bottom-2 -left-4 bg-white rounded-2xl shadow-lg px-5 py-3 border border-border/60">
                   <p className="font-serif text-xl font-bold text-nca-green">70,000+</p>

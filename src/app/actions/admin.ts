@@ -166,6 +166,41 @@ export async function deleteProduct(id: string) {
   return { success: true };
 }
 
+export async function updateHeroImage(formData: FormData) {
+  if (isDemoMode()) {
+    revalidatePath("/admin/homepage");
+    revalidatePath("/");
+    return;
+  }
+
+  const admin = await getAdminDb();
+  const file = formData.get("hero_image") as File | null;
+
+  if (!file || file.size === 0) {
+    throw new Error("Please choose an image to upload.");
+  }
+
+  const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
+  const path = `site/hero-${Date.now()}.${ext}`;
+
+  const { error: uploadError } = await admin.storage
+    .from("product-images")
+    .upload(path, file, { upsert: true, contentType: file.type || "image/jpeg" });
+
+  if (uploadError) throw new Error(`Image upload failed: ${uploadError.message}`);
+
+  const { data } = admin.storage.from("product-images").getPublicUrl(path);
+
+  const { error } = await admin
+    .from("site_settings")
+    .upsert({ key: "hero_image_url", value: data.publicUrl, updated_at: new Date().toISOString() });
+
+  if (error) throw new Error(error.message);
+
+  revalidatePath("/admin/homepage");
+  revalidatePath("/");
+}
+
 export async function getAdminCoupons(): Promise<Coupon[]> {
   if (isDemoMode()) {
     const { MOCK_COUPONS } = await import("@/lib/data/mock-data");

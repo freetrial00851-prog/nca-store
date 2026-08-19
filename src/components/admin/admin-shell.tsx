@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { Menu, X, LayoutDashboard, Package, ShoppingBag, Tag, Users, LogOut } from "lucide-react";
+import { Menu, X, LayoutDashboard, Package, ShoppingBag, Tag, Users, LogOut, Home } from "lucide-react";
 import { performLogout } from "@/lib/logout-client";
 
 const adminNav = [
   { href: "/admin", label: "Overview", icon: LayoutDashboard },
   { href: "/admin/products", label: "Products", icon: Package },
+  { href: "/admin/homepage", label: "Homepage", icon: Home },
   { href: "/admin/orders", label: "Orders", icon: ShoppingBag },
   { href: "/admin/coupons", label: "Coupons", icon: Tag },
   { href: "/admin/customers", label: "Customers", icon: Users },

@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { formatPrice } from "@/lib/utils";
 import { getAdminProducts } from "@/lib/data/products";
+import { DeleteProductButton } from "@/components/admin/delete-product-button";
 
 export default async function AdminProductsPage() {
   const products = await getAdminProducts();
@@ -56,11 +57,14 @@ export default async function AdminProductsPage() {
                     </Badge>
                   </td>
                   <td className="p-4">
-                    <Link href={`/admin/products/${product.id}`}>
-                      <Button variant="outline" size="sm">
-                        Edit
-                      </Button>
-                    </Link>
+                    <div className="flex gap-2">
+                      <Link href={`/admin/products/${product.id}`}>
+                        <Button variant="outline" size="sm">
+                          Edit
+                        </Button>
+                      </Link>
+                      <DeleteProductButton productId={product.id} productTitle={product.title} />
+                    </div>
                   </td>
                 </tr>
               ))}
