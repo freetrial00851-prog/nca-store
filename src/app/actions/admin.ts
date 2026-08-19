@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { isDemoMode } from "@/lib/demo-mode";
 import { getAdminDb } from "@/lib/auth-helpers";
 import { slugify } from "@/lib/utils";
-import type { Product, Coupon } from "@/types/database";
+import type { Product, Coupon, Category } from "@/types/database";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 async function uploadPatternPdf(
@@ -209,6 +209,291 @@ export async function updateHeroImage(
   } catch (err) {
     return { error: err instanceof Error ? err.message : "Something went wrong. Please try again." };
   }
+}
+
+export type FormActionState = { error?: string; success?: boolean };
+
+async function uploadCategoryImage(admin: SupabaseClient, slug: string, file: File): Promise<string> {
+  const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
+  const path = `categories/${slug}-${Date.now()}.${ext}`;
+  const { error } = await admin.storage.from("product-images").upload(path, file, {
+    upsert: true,
+    contentType: file.type || "image/jpeg",
+  });
+  if (error) throw new Error(`Category image upload failed: ${error.message}`);
+  const { data } = admin.storage.from("product-images").getPublicUrl(path);
+  return data.publicUrl;
+}
+
+export async function createCategory(
+  _prevState: FormActionState,
+  formData: FormData
+): Promise<FormActionState> {
+  if (isDemoMode()) return { error: "Categories can't be edited in demo mode." };
+
+  try {
+    const admin = await getAdminDb();
+    const name = (formData.get("name") as string)?.trim();
+    if (!name) return { error: "Name is required." };
+
+    const slug = slugify(name);
+    const sortOrder = parseInt(formData.get("sort_order") as string) || 0;
+    const description = (formData.get("description") as string) || null;
+
+    const { data, error } = await admin
+      .from("categories")
+      .insert({ name, slug, sort_order: sortOrder, description })
+      .select()
+      .single();
+
+    if (error) return { error: error.message };
+
+    const file = formData.get("image") as File | null;
+    if (file && file.size > 0 && data) {
+      const imageUrl = await uploadCategoryImage(admin, slug, file);
+      await admin.from("categories").update({ image_url: imageUrl }).eq("id", data.id);
+    }
+
+    revalidatePath("/admin/categories");
+    revalidatePath("/");
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Something went wrong." };
+  }
+
+  redirect("/admin/categories");
+}
+
+export async function updateCategory(
+  id: string,
+  _prevState: FormActionState,
+  formData: FormData
+): Promise<FormActionState> {
+  if (isDemoMode()) return { error: "Categories can't be edited in demo mode." };
+
+  try {
+    const admin = await getAdminDb();
+    const name = (formData.get("name") as string)?.trim();
+    if (!name) return { error: "Name is required." };
+
+    const sortOrder = parseInt(formData.get("sort_order") as string) || 0;
+    const description = (formData.get("description") as string) || null;
+
+    const { data: current, error: fetchError } = await admin
+      .from("categories")
+      .select("slug")
+      .eq("id", id)
+      .single();
+    if (fetchError || !current) return { error: "Category not found." };
+
+    const { error } = await admin
+      .from("categories")
+      .update({ name, sort_order: sortOrder, description })
+      .eq("id", id);
+    if (error) return { error: error.message };
+
+    const file = formData.get("image") as File | null;
+    if (file && file.size > 0) {
+      const imageUrl = await uploadCategoryImage(admin, current.slug, file);
+      await admin.from("categories").update({ image_url: imageUrl }).eq("id", id);
+    }
+
+    revalidatePath("/admin/categories");
+    revalidatePath("/");
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Something went wrong." };
+  }
+
+  redirect("/admin/categories");
+}
+
+export async function deleteCategory(id: string): Promise<FormActionState> {
+  if (isDemoMode()) return { error: "Categories can't be edited in demo mode." };
+
+  const admin = await getAdminDb();
+
+  const { count } = await admin
+    .from("products")
+    .select("id", { count: "exact", head: true })
+    .eq("category_id", id);
+
+  if (count && count > 0) {
+    return {
+      error: `Can't delete — ${count} product(s) still use this category. Move or delete those products first.`,
+    };
+  }
+
+  const { error } = await admin.from("categories").delete().eq("id", id);
+  if (error) return { error: error.message };
+
+  revalidatePath("/admin/categories");
+  revalidatePath("/");
+  return { success: true };
+}
+
+export async function getAdminCategories(): Promise<Category[]> {
+  if (isDemoMode()) {
+    const { MOCK_CATEGORIES } = await import("@/lib/data/mock-data");
+    return MOCK_CATEGORIES;
+  }
+
+  const admin = await getAdminDb();
+  const { data, error } = await admin.from("categories").select("*").order("sort_order");
+  if (error) throw new Error(error.message);
+  return (data as Category[]) ?? [];
+}
+
+export async function updateSiteSettings(
+  _prevState: FormActionState,
+  formData: FormData
+): Promise<FormActionState> {
+  if (isDemoMode()) return { error: "Settings can't be edited in demo mode." };
+
+  const admin = await getAdminDb();
+
+  const keys = [
+    "store_name",
+    "store_tagline",
+    "contact_email",
+    "instagram_url",
+    "facebook_url",
+    "pinterest_url",
+  ];
+
+  const rows = keys.map((key) => ({
+    key,
+    value: ((formData.get(key) as string) || "").trim() || null,
+    updated_at: new Date().toISOString(),
+  }));
+
+  const { error } = await admin.from("site_settings").upsert(rows);
+  if (error) return { error: error.message };
+
+  revalidatePath("/admin/settings");
+  revalidatePath("/");
+  return { success: true };
+}
+
+export interface AdminTeamMember {
+  userId: string;
+  email: string;
+  name: string | null;
+}
+
+export async function getAdminTeam(): Promise<AdminTeamMember[]> {
+  if (isDemoMode()) return [];
+
+  const admin = await getAdminDb();
+  const { data: roles, error } = await admin.from("roles").select("user_id").eq("role", "admin");
+  if (error) throw new Error(error.message);
+  if (!roles?.length) return [];
+
+  const userIds = roles.map((r) => r.user_id);
+  const { data: profiles } = await admin
+    .from("profiles")
+    .select("id, email, full_name")
+    .in("id", userIds);
+
+  return userIds.map((userId) => {
+    const profile = profiles?.find((p) => p.id === userId);
+    return {
+      userId,
+      email: profile?.email ?? "(unknown email)",
+      name: profile?.full_name ?? null,
+    };
+  });
+}
+
+export async function grantAdminByEmail(
+  _prevState: FormActionState,
+  formData: FormData
+): Promise<FormActionState> {
+  if (isDemoMode()) return { error: "Team can't be edited in demo mode." };
+
+  const email = (formData.get("email") as string)?.trim().toLowerCase();
+  if (!email) return { error: "Email is required." };
+
+  const admin = await getAdminDb();
+  const { data: profile } = await admin
+    .from("profiles")
+    .select("id")
+    .eq("email", email)
+    .maybeSingle();
+
+  if (!profile) {
+    return { error: "No account found with that email. They need to sign up first." };
+  }
+
+  const { error } = await admin
+    .from("roles")
+    .upsert({ user_id: profile.id, role: "admin" }, { onConflict: "user_id" });
+
+  if (error) return { error: error.message };
+
+  revalidatePath("/admin/team");
+  return { success: true };
+}
+
+export async function revokeAdmin(userId: string): Promise<FormActionState> {
+  if (isDemoMode()) return { error: "Team can't be edited in demo mode." };
+
+  const admin = await getAdminDb();
+  const { error } = await admin.from("roles").delete().eq("user_id", userId).eq("role", "admin");
+  if (error) return { error: error.message };
+
+  revalidatePath("/admin/team");
+  return { success: true };
+}
+
+export interface AdminReviewRow {
+  id: string;
+  rating: number;
+  comment: string | null;
+  created_at: string;
+  productTitle: string;
+  authorName: string;
+}
+
+export async function getAdminReviews(): Promise<AdminReviewRow[]> {
+  if (isDemoMode()) return [];
+
+  const admin = await getAdminDb();
+  const { data, error } = await admin
+    .from("reviews")
+    .select("id, rating, comment, created_at, product:products(title), profiles(full_name)")
+    .order("created_at", { ascending: false });
+
+  if (error) throw new Error(error.message);
+
+  return (data ?? []).map((row) => {
+    const r = row as unknown as {
+      id: string;
+      rating: number;
+      comment: string | null;
+      created_at: string;
+      product?: { title?: string };
+      profiles?: { full_name?: string };
+    };
+    return {
+      id: r.id,
+      rating: r.rating,
+      comment: r.comment,
+      created_at: r.created_at,
+      productTitle: r.product?.title ?? "Unknown product",
+      authorName: r.profiles?.full_name ?? "Customer",
+    };
+  });
+}
+
+export async function deleteReview(id: string): Promise<FormActionState> {
+  if (isDemoMode()) return { error: "Reviews can't be edited in demo mode." };
+
+  const admin = await getAdminDb();
+  const { error } = await admin.from("reviews").delete().eq("id", id);
+  if (error) return { error: error.message };
+
+  revalidatePath("/admin/reviews");
+  revalidatePath("/products");
+  return { success: true };
 }
 
 export async function getAdminCoupons(): Promise<Coupon[]> {

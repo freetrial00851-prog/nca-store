@@ -3,6 +3,7 @@ import Image from "next/image";
 import { Lock, Headphones, CheckCircle } from "lucide-react";
 import { NEWSLETTER_IMAGE } from "@/lib/data/product-images";
 import { NewsletterForm } from "@/components/layout/newsletter-form";
+import { getSiteSettings } from "@/app/actions/site-settings";
 
 const shopLinks = [
   { href: "/shop", label: "All Patterns" },
@@ -37,7 +38,8 @@ const accountLinks = [
   { href: "/account/settings", label: "Settings" },
 ];
 
-export function Footer() {
+export async function Footer() {
+  const social = await getSiteSettings(["instagram_url", "facebook_url", "pinterest_url"]);
   return (
     <footer className="bg-nca-cream border-t border-border mt-auto">
       {/* Newsletter */}
@@ -70,9 +72,30 @@ export function Footer() {
               Premium crochet patterns for makers of all skill levels. Instant digital downloads.
             </p>
             <div className="flex gap-3 text-xs font-semibold text-muted-foreground">
-              {["Instagram", "Pinterest", "TikTok", "Facebook", "YouTube"].map((s) => (
-                <span key={s} className="hover:text-nca-green cursor-pointer transition-colors">{s.charAt(0)}</span>
-              ))}
+              {[
+                { label: "Instagram", url: social.instagram_url },
+                { label: "Pinterest", url: social.pinterest_url },
+                { label: "TikTok", url: undefined },
+                { label: "Facebook", url: social.facebook_url },
+                { label: "YouTube", url: undefined },
+              ].map(({ label, url }) =>
+                url ? (
+                  <a
+                    key={label}
+                    href={url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="hover:text-nca-green transition-colors"
+                    aria-label={label}
+                  >
+                    {label.charAt(0)}
+                  </a>
+                ) : (
+                  <span key={label} className="cursor-default opacity-50" aria-hidden>
+                    {label.charAt(0)}
+                  </span>
+                )
+              )}
             </div>
           </div>
 

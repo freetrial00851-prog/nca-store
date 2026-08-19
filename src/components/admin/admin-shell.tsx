@@ -2,16 +2,20 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { Menu, X, LayoutDashboard, Package, ShoppingBag, Tag, Users, LogOut, Home } from "lucide-react";
+import { Menu, X, LayoutDashboard, Package, ShoppingBag, Tag, Users, LogOut, Home, FolderTree, Star, Shield, Settings } from "lucide-react";
 import { performLogout } from "@/lib/logout-client";
 
 const adminNav = [
   { href: "/admin", label: "Overview", icon: LayoutDashboard },
   { href: "/admin/products", label: "Products", icon: Package },
+  { href: "/admin/categories", label: "Categories", icon: FolderTree },
   { href: "/admin/homepage", label: "Homepage", icon: Home },
   { href: "/admin/orders", label: "Orders", icon: ShoppingBag },
   { href: "/admin/coupons", label: "Coupons", icon: Tag },
+  { href: "/admin/reviews", label: "Reviews", icon: Star },
   { href: "/admin/customers", label: "Customers", icon: Users },
+  { href: "/admin/team", label: "Team", icon: Shield },
+  { href: "/admin/settings", label: "Settings", icon: Settings },
 ];
 
 export function AdminShell({ children }: { children: React.ReactNode }) {
