@@ -9,6 +9,7 @@ import {
   Tag,
   Users,
   ArrowLeft,
+  LogOut,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -50,6 +51,16 @@ export function AdminSidebar() {
           );
         })}
       </nav>
+
+      <div className="mt-8 pt-4 border-t border-white/10">
+        <Link
+          href="/auth/logout"
+          className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-white/70 hover:bg-white/10 hover:text-white transition-colors"
+        >
+          <LogOut className="h-4 w-4" />
+          Log Out
+        </Link>
+      </div>
     </aside>
   );
 }
