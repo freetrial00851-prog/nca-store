@@ -25,7 +25,22 @@ export function PendingActionHandler() {
       if (!intent) return;
 
       const supabase = createClient();
-      const { data: { user } } = await supabase.auth.getUser();
+
+      // Right after a hard-navigation login redirect, the browser client can
+      // momentarily fail to see the just-set session cookie (same race as the
+      // Header auth-state bug). Retry a couple of times with a short delay
+      // before giving up, instead of bailing on the very first check.
+      let user = null;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const { data } = await supabase.auth.getUser();
+        if (data.user) {
+          user = data.user;
+          break;
+        }
+        if (attempt < 2) {
+          await new Promise((resolve) => setTimeout(resolve, 400));
+        }
+      }
       if (!user) return;
 
       try {
