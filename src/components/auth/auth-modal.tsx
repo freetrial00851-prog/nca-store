@@ -80,13 +80,10 @@ export function AuthModal() {
         return;
       }
 
-      const wishlistIds = useWishlistStore.getState().items.map((i) => i.id);
-
       const result = await performClientLogin({
         email,
         password,
         redirectTo: returnTo,
-        wishlistIds,
       });
 
       if (!result.ok) {

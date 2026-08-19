@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { createClient } from "@/lib/supabase/client";
 import { useWishlistStore } from "@/lib/store/wishlist-store";
 import { Button } from "@/components/ui/button";
 import { LogOut } from "lucide-react";
@@ -16,8 +15,7 @@ export default function LogoutPage() {
     setLoading(true);
     try {
       if (!isClientDemoMode()) {
-        const supabase = createClient();
-        await supabase.auth.signOut();
+        await fetch("/api/auth/logout", { method: "POST", credentials: "same-origin" });
       }
       clearWishlist();
       window.location.assign("/");

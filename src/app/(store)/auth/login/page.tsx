@@ -13,7 +13,6 @@ import {
 } from "@/lib/auth-intent";
 import { performClientLogin } from "@/lib/client-auth";
 import { isClientDemoMode } from "@/lib/checkout-client";
-import { useWishlistStore } from "@/lib/store/wishlist-store";
 import { toast } from "sonner";
 import { Suspense } from "react";
 
@@ -27,7 +26,6 @@ function LoginForm() {
   const [email, setEmail] = useState(isDemo ? "sarah@example.com" : "");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const wishlistIds = useWishlistStore((s) => s.items.map((i) => i.id));
 
   useEffect(() => {
     const error = searchParams.get("error");
@@ -55,7 +53,6 @@ function LoginForm() {
       email,
       password,
       redirectTo: redirect,
-      wishlistIds,
     });
 
     if (!result.ok) {

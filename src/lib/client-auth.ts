@@ -1,15 +1,12 @@
 "use client";
 
-import { createClient } from "@/lib/supabase/client";
 import { resolvePostAuthDestination, sanitizeReturnTo } from "@/lib/auth-intent";
 import { sanitizeLoginError } from "@/lib/auth-errors";
-import { syncGuestWishlistOnLogin } from "@/app/actions/pending-auth";
 
 export async function performClientLogin(options: {
   email: string;
   password: string;
   redirectTo: string;
-  wishlistIds?: string[];
 }): Promise<{ ok: true; destination: string } | { ok: false; message: string }> {
   const email = options.email.trim();
   const password = options.password;
@@ -19,40 +16,35 @@ export async function performClientLogin(options: {
     return { ok: false, message: "Email and password are required." };
   }
 
-  const supabase = createClient();
-  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-
-  if (error) {
-    return { ok: false, message: sanitizeLoginError(error.message) };
-  }
-
-  if (!data.session) {
-    return { ok: false, message: "Unable to sign in. Please try again." };
-  }
-
-  // Ensure browser cookies are written before navigation
-  await supabase.auth.getSession();
-
-  let isAdmin = false;
   try {
-    const { data: role } = await supabase
-      .from("roles")
-      .select("role")
-      .eq("user_id", data.user.id)
-      .maybeSingle();
-    isAdmin = role?.role === "admin";
-  } catch {
-    // Role lookup failed — continue as regular user
-  }
+    const res = await fetch("/api/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password, redirectTo }),
+      credentials: "same-origin",
+    });
 
-  if (options.wishlistIds?.length) {
-    try {
-      await syncGuestWishlistOnLogin(options.wishlistIds);
-    } catch {
-      // Non-fatal
+    const data = (await res.json()) as {
+      ok: boolean;
+      destination?: string;
+      message?: string;
+    };
+
+    if (!res.ok || !data.ok) {
+      return {
+        ok: false,
+        message: data.message ?? "Unable to sign in. Please check your email and password.",
+      };
     }
-  }
 
-  const destination = resolvePostAuthDestination(redirectTo, isAdmin);
-  return { ok: true, destination };
+    return {
+      ok: true,
+      destination: data.destination ?? resolvePostAuthDestination(redirectTo, false),
+    };
+  } catch {
+    return {
+      ok: false,
+      message: "Something went wrong. Please check your connection and try again.",
+    };
+  }
 }
