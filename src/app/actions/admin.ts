@@ -8,65 +8,32 @@ import { requireUser } from "@/lib/auth-helpers";
 import { slugify } from "@/lib/utils";
 import type { Product, Coupon, Category } from "@/types/database";
 
-export async function createProduct(formData: FormData) {
+export async function createProduct(
+  _prevState: FormActionState,
+  formData: FormData
+): Promise<FormActionState> {
   if (isDemoMode()) {
     revalidatePath("/admin/products");
     redirect("/admin/products");
   }
 
-  const admin = await getAdminDb();
-  const title = formData.get("title") as string;
-  const slug = slugify(title);
+  try {
+    const admin = await getAdminDb();
+    const title = (formData.get("title") as string)?.trim();
+    if (!title) return { error: "Title is required." };
+    const slug = slugify(title);
 
-  // File PDF/images are uploaded client-side beforehand (Vercel's serverless
-  // functions have a hard 4.5MB body limit that can't be raised); this form
-  // only receives the resulting URLs/paths as plain text fields.
-  const fileUrl = (formData.get("file_url") as string) || null;
-  const imagesRaw = (formData.get("images_json") as string) || "[]";
-  const images: string[] = JSON.parse(imagesRaw);
+    // File PDF/images are uploaded client-side beforehand (Vercel's
+    // serverless functions have a hard 4.5MB body limit that can't be
+    // raised); this form only receives the resulting URLs/paths as plain
+    // text fields.
+    const fileUrl = (formData.get("file_url") as string) || null;
+    const imagesRaw = (formData.get("images_json") as string) || "[]";
+    const images: string[] = JSON.parse(imagesRaw);
 
-  const { error } = await admin.from("products").insert({
-    title,
-    slug,
-    description: formData.get("description") as string,
-    price: parseFloat(formData.get("price") as string),
-    sale_price: formData.get("sale_price")
-      ? parseFloat(formData.get("sale_price") as string)
-      : null,
-    category_id: formData.get("category_id") as string,
-    skill_level: formData.get("skill_level") as "Beginner" | "Easy" | "Intermediate" | "Advanced",
-    language: "English",
-    pages_count: parseInt(formData.get("pages_count") as string) || 0,
-    format: "PDF",
-    is_featured: formData.get("is_featured") === "on",
-    is_bestseller: formData.get("is_bestseller") === "on",
-    is_new: formData.get("is_new") === "on",
-    is_active: true,
-    ...(fileUrl ? { file_url: fileUrl } : {}),
-    ...(images.length ? { images } : {}),
-  });
-
-  if (error) throw new Error(error.message);
-
-  revalidatePath("/admin/products");
-  redirect("/admin/products");
-}
-
-export async function updateProduct(id: string, formData: FormData) {
-  if (isDemoMode()) {
-    revalidatePath("/admin/products");
-    redirect("/admin/products");
-  }
-
-  const admin = await getAdminDb();
-
-  const fileUrl = (formData.get("file_url") as string) || null;
-  const imagesRaw = (formData.get("images_json") as string) || null;
-
-  const { error } = await admin
-    .from("products")
-    .update({
-      title: formData.get("title") as string,
+    const { error } = await admin.from("products").insert({
+      title,
+      slug,
       description: formData.get("description") as string,
       price: parseFloat(formData.get("price") as string),
       sale_price: formData.get("sale_price")
@@ -74,20 +41,75 @@ export async function updateProduct(id: string, formData: FormData) {
         : null,
       category_id: formData.get("category_id") as string,
       skill_level: formData.get("skill_level") as "Beginner" | "Easy" | "Intermediate" | "Advanced",
+      language: "English",
       pages_count: parseInt(formData.get("pages_count") as string) || 0,
+      format: "PDF",
       is_featured: formData.get("is_featured") === "on",
       is_bestseller: formData.get("is_bestseller") === "on",
       is_new: formData.get("is_new") === "on",
-      is_active: formData.get("is_active") === "on",
+      is_active: true,
       ...(fileUrl ? { file_url: fileUrl } : {}),
-      ...(imagesRaw ? { images: JSON.parse(imagesRaw) } : {}),
-    })
-    .eq("id", id);
+      ...(images.length ? { images } : {}),
+    });
 
-  if (error) throw new Error(error.message);
+    if (error) return { error: error.message };
 
-  revalidatePath("/admin/products");
-  revalidatePath(`/admin/products/${id}`);
+    revalidatePath("/admin/products");
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Something went wrong." };
+  }
+
+  redirect("/admin/products");
+}
+
+export async function updateProduct(
+  id: string,
+  _prevState: FormActionState,
+  formData: FormData
+): Promise<FormActionState> {
+  if (isDemoMode()) {
+    revalidatePath("/admin/products");
+    redirect("/admin/products");
+  }
+
+  try {
+    const admin = await getAdminDb();
+
+    const title = (formData.get("title") as string)?.trim();
+    if (!title) return { error: "Title is required." };
+
+    const fileUrl = (formData.get("file_url") as string) || null;
+    const imagesRaw = (formData.get("images_json") as string) || null;
+
+    const { error } = await admin
+      .from("products")
+      .update({
+        title,
+        description: formData.get("description") as string,
+        price: parseFloat(formData.get("price") as string),
+        sale_price: formData.get("sale_price")
+          ? parseFloat(formData.get("sale_price") as string)
+          : null,
+        category_id: formData.get("category_id") as string,
+        skill_level: formData.get("skill_level") as "Beginner" | "Easy" | "Intermediate" | "Advanced",
+        pages_count: parseInt(formData.get("pages_count") as string) || 0,
+        is_featured: formData.get("is_featured") === "on",
+        is_bestseller: formData.get("is_bestseller") === "on",
+        is_new: formData.get("is_new") === "on",
+        is_active: formData.get("is_active") === "on",
+        ...(fileUrl ? { file_url: fileUrl } : {}),
+        ...(imagesRaw ? { images: JSON.parse(imagesRaw) } : {}),
+      })
+      .eq("id", id);
+
+    if (error) return { error: error.message };
+
+    revalidatePath("/admin/products");
+    revalidatePath(`/admin/products/${id}`);
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Something went wrong." };
+  }
+
   redirect("/admin/products");
 }
 

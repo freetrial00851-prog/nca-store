@@ -1,17 +1,20 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useActionState, useState, useTransition } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import type { Category, Product } from "@/types/database";
+import type { FormActionState } from "@/app/actions/admin";
 import { uploadFileClient, slugifyClient } from "@/lib/admin-upload-client";
+
+const initialState: FormActionState = {};
 
 interface AdminProductFormProps {
   categories: Category[];
   product?: Product;
-  action: (formData: FormData) => Promise<void>;
+  action: (prevState: FormActionState, formData: FormData) => Promise<FormActionState>;
   submitLabel: string;
 }
 
@@ -21,36 +24,28 @@ export function AdminProductForm({
   action,
   submitLabel,
 }: AdminProductFormProps) {
-  const formRef = useRef<HTMLFormElement>(null);
-  const titleRef = useRef<HTMLInputElement>(null);
-  const fileUrlRef = useRef<HTMLInputElement>(null);
-  const imagesJsonRef = useRef<HTMLInputElement>(null);
-  const readyToSubmit = useRef(false);
+  const [state, formAction, actionPending] = useActionState(action, initialState);
 
   const [pdfFile, setPdfFile] = useState<File | null>(null);
   const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [isUploading, startUploading] = useTransition();
+  const pending = actionPending || isUploading;
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-    if (readyToSubmit.current) {
-      // Uploads already done, hidden fields already populated — let this
-      // native submission through so Next.js's own redirect handling works.
-      readyToSubmit.current = false;
-      return;
-    }
-
     e.preventDefault();
     setUploadError(null);
+    const fd = new FormData(e.currentTarget);
 
     startUploading(async () => {
       try {
-        const slug = product?.slug || slugifyClient(titleRef.current?.value || "pattern");
+        const title = (fd.get("title") as string) || "";
+        const slug = product?.slug || slugifyClient(title || "pattern");
 
         if (pdfFile) {
           const path = `patterns/${slug}-${Date.now()}.pdf`;
           const url = await uploadFileClient("pattern-files", path, pdfFile);
-          if (fileUrlRef.current) fileUrlRef.current.value = url;
+          fd.set("file_url", url);
         }
 
         if (imageFiles.length > 0) {
@@ -62,11 +57,10 @@ export function AdminProductForm({
             const url = await uploadFileClient("product-images", path, img);
             urls.push(url);
           }
-          if (imagesJsonRef.current) imagesJsonRef.current.value = JSON.stringify(urls);
+          fd.set("images_json", JSON.stringify(urls));
         }
 
-        readyToSubmit.current = true;
-        formRef.current?.requestSubmit();
+        formAction(fd);
       } catch (err) {
         setUploadError(err instanceof Error ? err.message : "Upload failed. Please try again.");
       }
@@ -76,15 +70,11 @@ export function AdminProductForm({
   return (
     <Card>
       <CardContent className="p-6">
-        <form ref={formRef} action={action} onSubmit={handleSubmit} className="grid md:grid-cols-2 gap-6">
-          <input type="hidden" name="file_url" ref={fileUrlRef} />
-          <input type="hidden" name="images_json" ref={imagesJsonRef} />
-
+        <form onSubmit={handleSubmit} className="grid md:grid-cols-2 gap-6">
           <div className="md:col-span-2">
             <label className="text-sm font-medium mb-1 block">Title</label>
             <Input
               name="title"
-              ref={titleRef}
               required
               defaultValue={product?.title}
               placeholder="Baby Bunny Lovey Crochet Pattern PDF"
@@ -216,15 +206,15 @@ export function AdminProductForm({
             )}
           </div>
 
-          {uploadError && (
+          {(uploadError || state.error) && (
             <p className="md:col-span-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
-              {uploadError}
+              {uploadError || state.error}
             </p>
           )}
 
           <div className="md:col-span-2 flex gap-3">
-            <Button type="submit" disabled={isUploading}>
-              {isUploading ? "Uploading..." : submitLabel}
+            <Button type="submit" disabled={pending}>
+              {pending ? "Saving..." : submitLabel}
             </Button>
             <Link href="/admin/products">
               <Button type="button" variant="outline">
