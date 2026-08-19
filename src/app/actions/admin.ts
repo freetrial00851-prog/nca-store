@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { isDemoMode } from "@/lib/demo-mode";
 import { getAdminDb } from "@/lib/auth-helpers";
+import { requireUser } from "@/lib/auth-helpers";
 import { slugify } from "@/lib/utils";
 import type { Product, Coupon, Category } from "@/types/database";
 
@@ -324,6 +325,11 @@ export async function grantAdminByEmail(
 
 export async function revokeAdmin(userId: string): Promise<FormActionState> {
   if (isDemoMode()) return { error: "Team can't be edited in demo mode." };
+
+  const currentUser = await requireUser();
+  if (currentUser.id === userId) {
+    return { error: "You can't revoke your own admin access." };
+  }
 
   const admin = await getAdminDb();
   const { error } = await admin.from("roles").delete().eq("user_id", userId).eq("role", "admin");
