@@ -33,8 +33,8 @@ export async function loginAction(formData: FormData) {
     throw new Error(sanitizeLoginError(error.message));
   }
 
-  if (data.user && !data.user.email_confirmed_at) {
-    throw new Error("Your email is not confirmed yet. Please check your inbox.");
+  if (!data.session) {
+    throw new Error("Unable to sign in. Please try again.");
   }
 
   if (wishlistIds) {

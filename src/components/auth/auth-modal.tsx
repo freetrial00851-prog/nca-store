@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
 import { useAuthUiStore } from "@/lib/store/auth-ui-store";
 import { useWishlistStore } from "@/lib/store/wishlist-store";
-import { createClient } from "@/lib/supabase/client";
+import { performClientLogin } from "@/lib/client-auth";
 import { signupAction } from "@/app/actions/auth";
 import { completePendingAuthAction } from "@/app/actions/pending-auth";
 import {
@@ -16,7 +16,7 @@ import {
   sanitizeReturnTo,
 } from "@/lib/auth-intent";
 import { sanitizeAuthError, sanitizeLoginError } from "@/lib/auth-errors";
-import { isClientDemoMode, isNextRedirectError } from "@/lib/checkout-client";
+import { isClientDemoMode } from "@/lib/checkout-client";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 
@@ -79,17 +79,14 @@ export function AuthModal() {
         return;
       }
 
-      const supabase = createClient();
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      const result = await performClientLogin({
+        email,
+        password,
+        redirectTo: returnTo,
+      });
 
-      if (error) {
-        toast.error(sanitizeLoginError(error.message));
-        setLoading(false);
-        return;
-      }
-
-      if (data.user && !data.user.email_confirmed_at) {
-        toast.error("Your email is not confirmed yet. Please check your inbox.");
+      if (!result.ok) {
+        toast.error(result.message);
         setLoading(false);
         return;
       }
@@ -106,8 +103,8 @@ export function AuthModal() {
       closeAuthModal();
       router.refresh();
     } catch (err) {
-      if (isNextRedirectError(err)) throw err;
       toast.error(sanitizeLoginError(err instanceof Error ? err.message : "Unable to sign in"));
+    } finally {
       setLoading(false);
     }
   }

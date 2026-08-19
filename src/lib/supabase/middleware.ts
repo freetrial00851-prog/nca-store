@@ -13,9 +13,7 @@ export async function updateSession(request: NextRequest) {
           return request.cookies.getAll();
         },
         setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value }) =>
-            request.cookies.set(name, value)
-          );
+          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
           supabaseResponse = NextResponse.next({ request });
           cookiesToSet.forEach(({ name, value, options }) =>
             supabaseResponse.cookies.set(name, value, options)
@@ -25,13 +23,15 @@ export async function updateSession(request: NextRequest) {
     }
   );
 
+  // Refresh session — required so auth cookies stay valid across navigations
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const isAdminRoute = request.nextUrl.pathname.startsWith("/admin");
-  const isAccountRoute = request.nextUrl.pathname.startsWith("/account");
-  const isCheckoutRoute = request.nextUrl.pathname === "/checkout";
+  const pathname = request.nextUrl.pathname;
+  const isAdminRoute = pathname.startsWith("/admin");
+  const isAccountRoute = pathname.startsWith("/account");
+  const isCheckoutRoute = pathname === "/checkout";
 
   if ((isAdminRoute || isAccountRoute || isCheckoutRoute) && !user) {
     const url = request.nextUrl.clone();

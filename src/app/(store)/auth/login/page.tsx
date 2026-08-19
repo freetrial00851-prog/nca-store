@@ -6,13 +6,13 @@ import { useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
-import { loginAction } from "@/app/actions/auth";
 import {
   parseAuthIntentFromSearchParams,
   sanitizeReturnTo,
   saveAuthIntent,
 } from "@/lib/auth-intent";
-import { isClientDemoMode, isNextRedirectError } from "@/lib/checkout-client";
+import { performClientLogin } from "@/lib/client-auth";
+import { isClientDemoMode } from "@/lib/checkout-client";
 import { useWishlistStore } from "@/lib/store/wishlist-store";
 import { toast } from "sonner";
 import { Suspense } from "react";
@@ -29,7 +29,7 @@ function LoginForm() {
   const [loading, setLoading] = useState(false);
   const wishlistIds = useWishlistStore((s) => s.items.map((i) => i.id));
 
-  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
 
@@ -39,19 +39,26 @@ function LoginForm() {
       saveAuthIntent({ returnTo: redirect });
     }
 
-    const formData = new FormData(e.currentTarget);
-    formData.set("redirect", redirect);
-    if (intentFromUrl?.action) formData.set("action", intentFromUrl.action);
-    if (intentFromUrl?.productId) formData.set("productId", intentFromUrl.productId);
-    formData.set("wishlistIds", JSON.stringify(wishlistIds));
-
-    try {
-      await loginAction(formData);
-    } catch (err) {
-      if (isNextRedirectError(err)) throw err;
-      toast.error(err instanceof Error ? err.message : "Unable to sign in. Please check your email and password.");
-      setLoading(false);
+    if (isDemo) {
+      window.location.assign(redirect);
+      return;
     }
+
+    const result = await performClientLogin({
+      email,
+      password,
+      redirectTo: redirect,
+      wishlistIds,
+    });
+
+    if (!result.ok) {
+      toast.error(result.message);
+      setLoading(false);
+      return;
+    }
+
+    toast.success("Signed in successfully");
+    window.location.assign(result.destination);
   }
 
   const signupHref = `/auth/signup?redirect=${encodeURIComponent(redirect)}${
@@ -78,11 +85,9 @@ function LoginForm() {
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          <input type="hidden" name="redirect" value={redirect} />
           <div>
             <label className="text-sm font-medium mb-1 block">Email</label>
             <Input
-              name="email"
               type="email"
               required
               value={email}
@@ -93,7 +98,6 @@ function LoginForm() {
           <div>
             <label className="text-sm font-medium mb-1 block">Password</label>
             <PasswordInput
-              name="password"
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
