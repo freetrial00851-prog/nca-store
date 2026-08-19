@@ -166,39 +166,49 @@ export async function deleteProduct(id: string) {
   return { success: true };
 }
 
-export async function updateHeroImage(formData: FormData) {
+export type UpdateHeroImageState = { error?: string; success?: boolean };
+
+export async function updateHeroImage(
+  _prevState: UpdateHeroImageState,
+  formData: FormData
+): Promise<UpdateHeroImageState> {
   if (isDemoMode()) {
     revalidatePath("/admin/homepage");
     revalidatePath("/");
-    return;
+    return { success: true };
   }
 
-  const admin = await getAdminDb();
-  const file = formData.get("hero_image") as File | null;
+  try {
+    const admin = await getAdminDb();
+    const file = formData.get("hero_image") as File | null;
 
-  if (!file || file.size === 0) {
-    throw new Error("Please choose an image to upload.");
+    if (!file || file.size === 0) {
+      return { error: "Please choose an image to upload." };
+    }
+
+    const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
+    const path = `site/hero-${Date.now()}.${ext}`;
+
+    const { error: uploadError } = await admin.storage
+      .from("product-images")
+      .upload(path, file, { upsert: true, contentType: file.type || "image/jpeg" });
+
+    if (uploadError) return { error: `Image upload failed: ${uploadError.message}` };
+
+    const { data } = admin.storage.from("product-images").getPublicUrl(path);
+
+    const { error } = await admin
+      .from("site_settings")
+      .upsert({ key: "hero_image_url", value: data.publicUrl, updated_at: new Date().toISOString() });
+
+    if (error) return { error: error.message };
+
+    revalidatePath("/admin/homepage");
+    revalidatePath("/");
+    return { success: true };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Something went wrong. Please try again." };
   }
-
-  const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
-  const path = `site/hero-${Date.now()}.${ext}`;
-
-  const { error: uploadError } = await admin.storage
-    .from("product-images")
-    .upload(path, file, { upsert: true, contentType: file.type || "image/jpeg" });
-
-  if (uploadError) throw new Error(`Image upload failed: ${uploadError.message}`);
-
-  const { data } = admin.storage.from("product-images").getPublicUrl(path);
-
-  const { error } = await admin
-    .from("site_settings")
-    .upsert({ key: "hero_image_url", value: data.publicUrl, updated_at: new Date().toISOString() });
-
-  if (error) throw new Error(error.message);
-
-  revalidatePath("/admin/homepage");
-  revalidatePath("/");
 }
 
 export async function getAdminCoupons(): Promise<Coupon[]> {
