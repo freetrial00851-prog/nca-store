@@ -1,7 +1,8 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState, useTransition } from "react";
 import { updateHeroImage, type UpdateHeroImageState } from "@/app/actions/admin";
+import { uploadFileClient } from "@/lib/admin-upload-client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -11,8 +12,32 @@ import Image from "next/image";
 const initialState: UpdateHeroImageState = {};
 
 export function HeroImageForm({ initialHeroImageUrl }: { initialHeroImageUrl: string }) {
-  const [state, formAction, pending] = useActionState(updateHeroImage, initialState);
+  const [state, formAction, actionPending] = useActionState(updateHeroImage, initialState);
+  const [file, setFile] = useState<File | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [isUploading, startUploading] = useTransition();
   const isDefault = initialHeroImageUrl === HERO_IMAGE;
+  const pending = actionPending || isUploading;
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!file) {
+      setUploadError("Please choose an image to upload.");
+      return;
+    }
+    setUploadError(null);
+    startUploading(async () => {
+      try {
+        const path = `site/hero-${Date.now()}.${file.name.split(".").pop()?.toLowerCase() || "jpg"}`;
+        const url = await uploadFileClient("product-images", path, file);
+        const fd = new FormData();
+        fd.set("hero_image_url", url);
+        formAction(fd);
+      } catch (err) {
+        setUploadError(err instanceof Error ? err.message : "Upload failed. Please try again.");
+      }
+    });
+  }
 
   return (
     <Card>
@@ -28,16 +53,21 @@ export function HeroImageForm({ initialHeroImageUrl }: { initialHeroImageUrl: st
             <Image src={initialHeroImageUrl} alt="Current hero image" fill className="object-cover" unoptimized />
           </div>
 
-          <form action={formAction} encType="multipart/form-data" className="flex-1 space-y-3">
+          <form onSubmit={handleSubmit} className="flex-1 space-y-3">
             <label className="text-sm font-medium block">Upload new image</label>
-            <Input name="hero_image" type="file" accept="image/*" required />
+            <Input
+              name="hero_image"
+              type="file"
+              accept="image/*"
+              onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+            />
             <p className="text-xs text-muted-foreground">
               Square images work best (e.g. 800×800px). JPG, PNG, or WebP.
             </p>
 
-            {state.error && (
+            {(state.error || uploadError) && (
               <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
-                {state.error}
+                {uploadError || state.error}
               </p>
             )}
             {state.success && (

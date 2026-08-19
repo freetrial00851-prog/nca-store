@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState, useTransition } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import type { Category } from "@/types/database";
 import type { FormActionState } from "@/app/actions/admin";
+import { uploadFileClient, slugifyClient } from "@/lib/admin-upload-client";
 
 const initialState: FormActionState = {};
 
@@ -20,12 +21,39 @@ export function CategoryForm({
   action: (prevState: FormActionState, formData: FormData) => Promise<FormActionState>;
   submitLabel: string;
 }) {
-  const [state, formAction, pending] = useActionState(action, initialState);
+  const [state, formAction, actionPending] = useActionState(action, initialState);
+  const [file, setFile] = useState<File | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [isUploading, startUploading] = useTransition();
+  const pending = actionPending || isUploading;
+
+  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setUploadError(null);
+    const form = e.currentTarget;
+    const fd = new FormData(form);
+    fd.delete("image");
+
+    startUploading(async () => {
+      try {
+        if (file && file.size > 0) {
+          const name = (fd.get("name") as string) || category?.name || "category";
+          const slug = category?.slug || slugifyClient(name);
+          const path = `categories/${slug}-${Date.now()}.${file.name.split(".").pop()?.toLowerCase() || "jpg"}`;
+          const url = await uploadFileClient("product-images", path, file);
+          fd.set("image_url", url);
+        }
+        formAction(fd);
+      } catch (err) {
+        setUploadError(err instanceof Error ? err.message : "Upload failed. Please try again.");
+      }
+    });
+  }
 
   return (
     <Card>
       <CardContent className="p-6">
-        <form action={formAction} encType="multipart/form-data" className="space-y-4 max-w-lg">
+        <form onSubmit={handleSubmit} className="space-y-4 max-w-lg">
           <div>
             <label className="text-sm font-medium mb-1 block">Name</label>
             <Input name="name" required defaultValue={category?.name} placeholder="Amigurumi" />
@@ -54,12 +82,12 @@ export function CategoryForm({
                 <Image src={category.image_url} alt={category.name} fill className="object-cover" unoptimized />
               </div>
             )}
-            <Input name="image" type="file" accept="image/*" />
+            <Input name="image" type="file" accept="image/*" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
           </div>
 
-          {state.error && (
+          {(state.error || uploadError) && (
             <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
-              {state.error}
+              {uploadError || state.error}
             </p>
           )}
 

@@ -1,10 +1,12 @@
 "use client";
 
+import { useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import type { Category, Product } from "@/types/database";
+import { uploadFileClient, slugifyClient } from "@/lib/admin-upload-client";
 
 interface AdminProductFormProps {
   categories: Category[];
@@ -19,14 +21,70 @@ export function AdminProductForm({
   action,
   submitLabel,
 }: AdminProductFormProps) {
+  const formRef = useRef<HTMLFormElement>(null);
+  const titleRef = useRef<HTMLInputElement>(null);
+  const fileUrlRef = useRef<HTMLInputElement>(null);
+  const imagesJsonRef = useRef<HTMLInputElement>(null);
+  const readyToSubmit = useRef(false);
+
+  const [pdfFile, setPdfFile] = useState<File | null>(null);
+  const [imageFiles, setImageFiles] = useState<File[]>([]);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [isUploading, startUploading] = useTransition();
+
+  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    if (readyToSubmit.current) {
+      // Uploads already done, hidden fields already populated — let this
+      // native submission through so Next.js's own redirect handling works.
+      readyToSubmit.current = false;
+      return;
+    }
+
+    e.preventDefault();
+    setUploadError(null);
+
+    startUploading(async () => {
+      try {
+        const slug = product?.slug || slugifyClient(titleRef.current?.value || "pattern");
+
+        if (pdfFile) {
+          const path = `patterns/${slug}-${Date.now()}.pdf`;
+          const url = await uploadFileClient("pattern-files", path, pdfFile);
+          if (fileUrlRef.current) fileUrlRef.current.value = url;
+        }
+
+        if (imageFiles.length > 0) {
+          const existing = (product?.images as string[]) ?? [];
+          const urls = [...existing];
+          for (const img of imageFiles) {
+            const ext = img.name.split(".").pop()?.toLowerCase() || "jpg";
+            const path = `${slug}/${Date.now()}-${urls.length}.${ext}`;
+            const url = await uploadFileClient("product-images", path, img);
+            urls.push(url);
+          }
+          if (imagesJsonRef.current) imagesJsonRef.current.value = JSON.stringify(urls);
+        }
+
+        readyToSubmit.current = true;
+        formRef.current?.requestSubmit();
+      } catch (err) {
+        setUploadError(err instanceof Error ? err.message : "Upload failed. Please try again.");
+      }
+    });
+  }
+
   return (
     <Card>
       <CardContent className="p-6">
-        <form action={action} encType="multipart/form-data" className="grid md:grid-cols-2 gap-6">
+        <form ref={formRef} action={action} onSubmit={handleSubmit} className="grid md:grid-cols-2 gap-6">
+          <input type="hidden" name="file_url" ref={fileUrlRef} />
+          <input type="hidden" name="images_json" ref={imagesJsonRef} />
+
           <div className="md:col-span-2">
             <label className="text-sm font-medium mb-1 block">Title</label>
             <Input
               name="title"
+              ref={titleRef}
               required
               defaultValue={product?.title}
               placeholder="Baby Bunny Lovey Crochet Pattern PDF"
@@ -129,14 +187,23 @@ export function AdminProductForm({
                 <label className="text-sm font-medium mb-1 block">
                   Pattern PDF {product ? "(replace)" : ""}
                 </label>
-                <Input name="file" type="file" accept=".pdf,application/pdf" />
+                <Input
+                  type="file"
+                  accept=".pdf,application/pdf"
+                  onChange={(e) => setPdfFile(e.target.files?.[0] ?? null)}
+                />
                 {product?.file_url && (
                   <p className="text-xs text-muted-foreground mt-1">Current: {product.file_url}</p>
                 )}
               </div>
               <div>
                 <label className="text-sm font-medium mb-1 block">Product Images</label>
-                <Input name="images" type="file" accept="image/*" multiple />
+                <Input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  onChange={(e) => setImageFiles(Array.from(e.target.files ?? []))}
+                />
                 <p className="text-xs text-muted-foreground mt-1">
                   Upload 1–4 gallery images (JPG, PNG, WebP)
                 </p>
@@ -149,8 +216,16 @@ export function AdminProductForm({
             )}
           </div>
 
+          {uploadError && (
+            <p className="md:col-span-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+              {uploadError}
+            </p>
+          )}
+
           <div className="md:col-span-2 flex gap-3">
-            <Button type="submit">{submitLabel}</Button>
+            <Button type="submit" disabled={isUploading}>
+              {isUploading ? "Uploading..." : submitLabel}
+            </Button>
             <Link href="/admin/products">
               <Button type="button" variant="outline">
                 Cancel

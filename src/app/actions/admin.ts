@@ -6,48 +6,6 @@ import { isDemoMode } from "@/lib/demo-mode";
 import { getAdminDb } from "@/lib/auth-helpers";
 import { slugify } from "@/lib/utils";
 import type { Product, Coupon, Category } from "@/types/database";
-import type { SupabaseClient } from "@supabase/supabase-js";
-
-async function uploadPatternPdf(
-  admin: SupabaseClient,
-  slug: string,
-  file: File
-): Promise<string> {
-  const path = `patterns/${slug}.pdf`;
-  const { error } = await admin.storage.from("pattern-files").upload(path, file, {
-    upsert: true,
-    contentType: "application/pdf",
-  });
-  if (error) throw new Error(`PDF upload failed: ${error.message}`);
-  return path;
-}
-
-async function uploadProductImages(
-  admin: SupabaseClient,
-  slug: string,
-  formData: FormData,
-  existing: string[] = []
-): Promise<string[]> {
-  const entries = formData.getAll("images");
-  const uploaded: string[] = [...existing];
-
-  for (const entry of entries) {
-    if (!(entry instanceof File) || entry.size === 0) continue;
-
-    const ext = entry.name.split(".").pop()?.toLowerCase() || "jpg";
-    const path = `${slug}/${Date.now()}-${uploaded.length}.${ext}`;
-    const { error } = await admin.storage.from("product-images").upload(path, entry, {
-      upsert: true,
-      contentType: entry.type || "image/jpeg",
-    });
-    if (error) throw new Error(`Image upload failed: ${error.message}`);
-
-    const { data } = admin.storage.from("product-images").getPublicUrl(path);
-    uploaded.push(data.publicUrl);
-  }
-
-  return uploaded;
-}
 
 export async function createProduct(formData: FormData) {
   if (isDemoMode()) {
@@ -59,7 +17,14 @@ export async function createProduct(formData: FormData) {
   const title = formData.get("title") as string;
   const slug = slugify(title);
 
-  const { data, error } = await admin.from("products").insert({
+  // File PDF/images are uploaded client-side beforehand (Vercel's serverless
+  // functions have a hard 4.5MB body limit that can't be raised); this form
+  // only receives the resulting URLs/paths as plain text fields.
+  const fileUrl = (formData.get("file_url") as string) || null;
+  const imagesRaw = (formData.get("images_json") as string) || "[]";
+  const images: string[] = JSON.parse(imagesRaw);
+
+  const { error } = await admin.from("products").insert({
     title,
     slug,
     description: formData.get("description") as string,
@@ -76,25 +41,11 @@ export async function createProduct(formData: FormData) {
     is_bestseller: formData.get("is_bestseller") === "on",
     is_new: formData.get("is_new") === "on",
     is_active: true,
-  }).select().single();
+    ...(fileUrl ? { file_url: fileUrl } : {}),
+    ...(images.length ? { images } : {}),
+  });
 
   if (error) throw new Error(error.message);
-
-  const file = formData.get("file") as File | null;
-  let fileUrl: string | null = null;
-  if (file && file.size > 0 && data) {
-    fileUrl = await uploadPatternPdf(admin, data.slug, file);
-  }
-
-  const images = await uploadProductImages(admin, slug, formData);
-
-  await admin
-    .from("products")
-    .update({
-      ...(fileUrl ? { file_url: fileUrl } : {}),
-      ...(images.length ? { images } : {}),
-    })
-    .eq("id", data.id);
 
   revalidatePath("/admin/products");
   redirect("/admin/products");
@@ -108,48 +59,31 @@ export async function updateProduct(id: string, formData: FormData) {
 
   const admin = await getAdminDb();
 
-  const { error } = await admin.from("products").update({
-    title: formData.get("title") as string,
-    description: formData.get("description") as string,
-    price: parseFloat(formData.get("price") as string),
-    sale_price: formData.get("sale_price")
-      ? parseFloat(formData.get("sale_price") as string)
-      : null,
-    category_id: formData.get("category_id") as string,
-    skill_level: formData.get("skill_level") as "Beginner" | "Easy" | "Intermediate" | "Advanced",
-    pages_count: parseInt(formData.get("pages_count") as string) || 0,
-    is_featured: formData.get("is_featured") === "on",
-    is_bestseller: formData.get("is_bestseller") === "on",
-    is_new: formData.get("is_new") === "on",
-    is_active: formData.get("is_active") === "on",
-  }).eq("id", id);
+  const fileUrl = (formData.get("file_url") as string) || null;
+  const imagesRaw = (formData.get("images_json") as string) || null;
+
+  const { error } = await admin
+    .from("products")
+    .update({
+      title: formData.get("title") as string,
+      description: formData.get("description") as string,
+      price: parseFloat(formData.get("price") as string),
+      sale_price: formData.get("sale_price")
+        ? parseFloat(formData.get("sale_price") as string)
+        : null,
+      category_id: formData.get("category_id") as string,
+      skill_level: formData.get("skill_level") as "Beginner" | "Easy" | "Intermediate" | "Advanced",
+      pages_count: parseInt(formData.get("pages_count") as string) || 0,
+      is_featured: formData.get("is_featured") === "on",
+      is_bestseller: formData.get("is_bestseller") === "on",
+      is_new: formData.get("is_new") === "on",
+      is_active: formData.get("is_active") === "on",
+      ...(fileUrl ? { file_url: fileUrl } : {}),
+      ...(imagesRaw ? { images: JSON.parse(imagesRaw) } : {}),
+    })
+    .eq("id", id);
 
   if (error) throw new Error(error.message);
-
-  const { data: current } = await admin
-    .from("products")
-    .select("slug, images")
-    .eq("id", id)
-    .single();
-
-  const file = formData.get("file") as File | null;
-  const updates: { file_url?: string; images?: string[] } = {};
-
-  if (file && file.size > 0 && current) {
-    updates.file_url = await uploadPatternPdf(admin, current.slug, file);
-  }
-
-  const images = await uploadProductImages(
-    admin,
-    current?.slug ?? id,
-    formData,
-    (current?.images as string[]) ?? []
-  );
-  if (images.length) updates.images = images;
-
-  if (Object.keys(updates).length) {
-    await admin.from("products").update(updates).eq("id", id);
-  }
 
   revalidatePath("/admin/products");
   revalidatePath(`/admin/products/${id}`);
@@ -179,27 +113,13 @@ export async function updateHeroImage(
   }
 
   try {
+    const url = (formData.get("hero_image_url") as string)?.trim();
+    if (!url) return { error: "Please choose an image to upload." };
+
     const admin = await getAdminDb();
-    const file = formData.get("hero_image") as File | null;
-
-    if (!file || file.size === 0) {
-      return { error: "Please choose an image to upload." };
-    }
-
-    const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
-    const path = `site/hero-${Date.now()}.${ext}`;
-
-    const { error: uploadError } = await admin.storage
-      .from("product-images")
-      .upload(path, file, { upsert: true, contentType: file.type || "image/jpeg" });
-
-    if (uploadError) return { error: `Image upload failed: ${uploadError.message}` };
-
-    const { data } = admin.storage.from("product-images").getPublicUrl(path);
-
     const { error } = await admin
       .from("site_settings")
-      .upsert({ key: "hero_image_url", value: data.publicUrl, updated_at: new Date().toISOString() });
+      .upsert({ key: "hero_image_url", value: url, updated_at: new Date().toISOString() });
 
     if (error) return { error: error.message };
 
@@ -212,18 +132,6 @@ export async function updateHeroImage(
 }
 
 export type FormActionState = { error?: string; success?: boolean };
-
-async function uploadCategoryImage(admin: SupabaseClient, slug: string, file: File): Promise<string> {
-  const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
-  const path = `categories/${slug}-${Date.now()}.${ext}`;
-  const { error } = await admin.storage.from("product-images").upload(path, file, {
-    upsert: true,
-    contentType: file.type || "image/jpeg",
-  });
-  if (error) throw new Error(`Category image upload failed: ${error.message}`);
-  const { data } = admin.storage.from("product-images").getPublicUrl(path);
-  return data.publicUrl;
-}
 
 export async function createCategory(
   _prevState: FormActionState,
@@ -239,20 +147,13 @@ export async function createCategory(
     const slug = slugify(name);
     const sortOrder = parseInt(formData.get("sort_order") as string) || 0;
     const description = (formData.get("description") as string) || null;
+    const imageUrl = (formData.get("image_url") as string) || null;
 
-    const { data, error } = await admin
+    const { error } = await admin
       .from("categories")
-      .insert({ name, slug, sort_order: sortOrder, description })
-      .select()
-      .single();
+      .insert({ name, slug, sort_order: sortOrder, description, ...(imageUrl ? { image_url: imageUrl } : {}) });
 
     if (error) return { error: error.message };
-
-    const file = formData.get("image") as File | null;
-    if (file && file.size > 0 && data) {
-      const imageUrl = await uploadCategoryImage(admin, slug, file);
-      await admin.from("categories").update({ image_url: imageUrl }).eq("id", data.id);
-    }
 
     revalidatePath("/admin/categories");
     revalidatePath("/");
@@ -277,25 +178,13 @@ export async function updateCategory(
 
     const sortOrder = parseInt(formData.get("sort_order") as string) || 0;
     const description = (formData.get("description") as string) || null;
-
-    const { data: current, error: fetchError } = await admin
-      .from("categories")
-      .select("slug")
-      .eq("id", id)
-      .single();
-    if (fetchError || !current) return { error: "Category not found." };
+    const imageUrl = (formData.get("image_url") as string) || null;
 
     const { error } = await admin
       .from("categories")
-      .update({ name, sort_order: sortOrder, description })
+      .update({ name, sort_order: sortOrder, description, ...(imageUrl ? { image_url: imageUrl } : {}) })
       .eq("id", id);
     if (error) return { error: error.message };
-
-    const file = formData.get("image") as File | null;
-    if (file && file.size > 0) {
-      const imageUrl = await uploadCategoryImage(admin, current.slug, file);
-      await admin.from("categories").update({ image_url: imageUrl }).eq("id", id);
-    }
 
     revalidatePath("/admin/categories");
     revalidatePath("/");
