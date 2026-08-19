@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { updateProfile, updatePassword, updateNotifications } from "@/app/actions/profile";
@@ -107,11 +108,11 @@ export function SettingsForm({ profile }: SettingsFormProps) {
               >
                 <div>
                   <Label htmlFor="new_password">New Password</Label>
-                  <Input id="new_password" name="new_password" type="password" required />
+                  <PasswordInput id="new_password" name="new_password" required />
                 </div>
                 <div>
                   <Label htmlFor="confirm_password">Confirm New Password</Label>
-                  <Input id="confirm_password" name="confirm_password" type="password" required />
+                  <PasswordInput id="confirm_password" name="confirm_password" required />
                 </div>
                 <Button type="submit">Update Password</Button>
               </form>

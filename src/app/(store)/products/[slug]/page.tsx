@@ -16,6 +16,7 @@ import { ProductActions } from "@/components/products/product-actions";
 import { ProductTabs } from "@/components/products/product-tabs";
 import { ProductGallery } from "@/components/products/product-gallery";
 import { getProductBySlug, getProducts, getCategories } from "@/lib/data/products";
+import { userOwnsProduct } from "@/app/actions/ownership";
 import { formatPrice, getEffectivePrice } from "@/lib/utils";
 
 interface ProductPageProps {
@@ -37,6 +38,8 @@ export default async function ProductPage({ params }: ProductPageProps) {
     getCategories(),
   ]);
   if (!product) notFound();
+
+  const owned = await userOwnsProduct(product.id);
 
   const category = categories.find((c) => c.id === product.category_id);
   const related = allProducts
@@ -107,7 +110,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
             </div>
           </div>
 
-          <ProductActions product={product} />
+          <ProductActions product={product} owned={owned} />
 
           <div className="grid grid-cols-2 gap-4 mt-6">
             <div className="flex items-start gap-3 p-4 rounded-lg bg-nca-sage/50">

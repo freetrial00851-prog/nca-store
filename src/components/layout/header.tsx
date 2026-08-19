@@ -53,12 +53,42 @@ function IconAction({
   );
 }
 
+function CartIconAction({
+  count,
+  onClick,
+}: {
+  count: number;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex flex-col items-center gap-0.5 px-2 py-1 hover:text-nca-green transition-colors group"
+      aria-label="Open cart"
+    >
+      <div className="relative">
+        <ShoppingBag className="h-5 w-5 text-nca-charcoal group-hover:text-nca-green" />
+        {count > 0 && (
+          <span className="absolute -top-2 -right-2 h-4 min-w-4 px-0.5 rounded-full bg-nca-green text-white text-[10px] font-bold flex items-center justify-center">
+            {count}
+          </span>
+        )}
+      </div>
+      <span className="text-[10px] font-medium text-muted-foreground group-hover:text-nca-green hidden sm:block">
+        Cart
+      </span>
+    </button>
+  );
+}
+
 export function Header() {
   const pathname = usePathname();
   const mounted = useMounted();
   const [menuOpen, setMenuOpen] = useState(false);
   const [categoriesOpen, setCategoriesOpen] = useState(false);
   const cartCount = useCartStore((s) => s.getItemCount());
+  const openDrawer = useCartStore((s) => s.openDrawer);
   const wishlistCount = useWishlistStore((s) => s.getItemCount());
 
   const displayCartCount = mounted ? cartCount : 0;
@@ -102,7 +132,7 @@ export function Header() {
             <div className="flex items-center gap-1 shrink-0">
               <IconAction href="/account/wishlist" icon={Heart} label="Wishlist" count={displayWishlistCount} />
               <IconAction href="/account" icon={User} label="Account" />
-              <IconAction href="/cart" icon={ShoppingBag} label="Cart" count={displayCartCount} />
+              <CartIconAction count={displayCartCount} onClick={openDrawer} />
               <button
                 type="button"
                 className="xl:hidden p-2 ml-1"

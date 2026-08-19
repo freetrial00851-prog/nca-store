@@ -13,6 +13,29 @@ interface CheckoutItem {
   quantity: number;
 }
 
+async function resolveCheckoutItems(items: CheckoutItem[]): Promise<CheckoutItem[]> {
+  const supabase = await createClient();
+  const productIds = [...new Set(items.map((i) => i.product.id))];
+
+  const { data: products, error } = await supabase
+    .from("products")
+    .select("*")
+    .in("id", productIds)
+    .eq("is_active", true);
+
+  if (error || !products?.length) {
+    throw new Error("This product is currently unavailable.");
+  }
+
+  return items.map((item) => {
+    const dbProduct = products.find((p) => p.id === item.product.id);
+    if (!dbProduct) {
+      throw new Error("This product is currently unavailable.");
+    }
+    return { product: dbProduct as Product, quantity: 1 };
+  });
+}
+
 export async function createCheckoutSession(
   items: CheckoutItem[],
   couponCode?: string | null
@@ -34,12 +57,14 @@ export async function createCheckoutSession(
     redirect("/auth/login?redirect=/checkout");
   }
 
+  const verifiedItems = await resolveCheckoutItems(items);
+
   if (!isStripeConfigured()) {
-    const orderId = await createManualOrder(items, couponCode, user.id);
+    const orderId = await createManualOrder(verifiedItems, couponCode, user.id);
     return { url: `/checkout/success?order_id=${orderId}` };
   }
 
-  let subtotal = items.reduce(
+  let subtotal = verifiedItems.reduce(
     (sum, item) =>
       sum + (item.product.sale_price ?? item.product.price) * item.quantity,
     0
@@ -68,7 +93,7 @@ export async function createCheckoutSession(
     throw new Error("Stripe is not configured");
   }
 
-  const lineItems = items.map((item) => ({
+  const lineItems = verifiedItems.map((item) => ({
     price_data: {
       currency: "usd",
       product_data: {
@@ -95,7 +120,7 @@ export async function createCheckoutSession(
     metadata: {
       user_id: user.id,
       coupon_id: couponId ?? "",
-      item_ids: items.map((i) => i.product.id).join(","),
+      item_ids: verifiedItems.map((i) => i.product.id).join(","),
     },
     success_url: `${appUrl}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${appUrl}/cart`,

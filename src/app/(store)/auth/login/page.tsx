@@ -5,35 +5,58 @@ import { useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { loginAction } from "@/app/actions/auth";
+import {
+  parseAuthIntentFromSearchParams,
+  sanitizeReturnTo,
+  saveAuthIntent,
+} from "@/lib/auth-intent";
 import { isClientDemoMode, isNextRedirectError } from "@/lib/checkout-client";
+import { useWishlistStore } from "@/lib/store/wishlist-store";
 import { toast } from "sonner";
 import { Suspense } from "react";
 
 function LoginForm() {
   const searchParams = useSearchParams();
-  const redirectParam = searchParams.get("redirect");
-  const redirect = redirectParam && redirectParam !== "/account" ? redirectParam : "/";
+  const intentFromUrl = parseAuthIntentFromSearchParams(searchParams);
+  const redirect = sanitizeReturnTo(
+    searchParams.get("redirect") ?? searchParams.get("returnTo")
+  );
   const isDemo = isClientDemoMode();
   const [email, setEmail] = useState(isDemo ? "sarah@example.com" : "");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const wishlistIds = useWishlistStore((s) => s.items.map((i) => i.id));
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setLoading(true);
 
+    if (intentFromUrl) {
+      saveAuthIntent(intentFromUrl);
+    } else if (redirect !== "/") {
+      saveAuthIntent({ returnTo: redirect });
+    }
+
     const formData = new FormData(e.currentTarget);
     formData.set("redirect", redirect);
+    if (intentFromUrl?.action) formData.set("action", intentFromUrl.action);
+    if (intentFromUrl?.productId) formData.set("productId", intentFromUrl.productId);
+    formData.set("wishlistIds", JSON.stringify(wishlistIds));
 
     try {
       await loginAction(formData);
     } catch (err) {
       if (isNextRedirectError(err)) throw err;
-      toast.error(err instanceof Error ? err.message : "Login failed");
+      toast.error(err instanceof Error ? err.message : "Unable to sign in. Please check your email and password.");
       setLoading(false);
     }
   }
+
+  const signupHref = `/auth/signup?redirect=${encodeURIComponent(redirect)}${
+    intentFromUrl?.action ? `&action=${intentFromUrl.action}` : ""
+  }${intentFromUrl?.productId ? `&productId=${intentFromUrl.productId}` : ""}`;
 
   return (
     <div className="min-h-[70vh] flex items-center justify-center px-4 py-12 bg-nca-cream/50">
@@ -43,7 +66,9 @@ function LoginForm() {
         </Link>
         <h1 className="font-serif text-2xl font-bold mt-6 mb-1">Sign In</h1>
         <p className="text-sm text-muted-foreground mb-6">
-          Sign in to shop, checkout, and access your patterns.
+          {intentFromUrl?.action === "favorite"
+            ? "Sign in to save this pattern"
+            : "Sign in to shop, checkout, and access your patterns."}
         </p>
 
         {isDemo && (
@@ -62,17 +87,18 @@ function LoginForm() {
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              autoComplete="email"
             />
           </div>
           <div>
             <label className="text-sm font-medium mb-1 block">Password</label>
-            <Input
+            <PasswordInput
               name="password"
-              type="password"
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder={isDemo ? "any password" : ""}
+              autoComplete="current-password"
             />
           </div>
           <Button type="submit" className="w-full" disabled={loading}>
@@ -80,9 +106,18 @@ function LoginForm() {
           </Button>
         </form>
 
-        <p className="text-sm text-center text-muted-foreground mt-6">
+        <p className="text-sm text-center mt-4">
+          <Link
+            href={`/auth/forgot-password?redirect=${encodeURIComponent(redirect)}`}
+            className="text-nca-green hover:underline"
+          >
+            Forgot password?
+          </Link>
+        </p>
+
+        <p className="text-sm text-center text-muted-foreground mt-4">
           Don&apos;t have an account?{" "}
-          <Link href="/auth/signup" className="text-nca-green hover:underline font-medium">
+          <Link href={signupHref} className="text-nca-green hover:underline font-medium">
             Create one
           </Link>
         </p>

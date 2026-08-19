@@ -1,15 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
-import { Heart, ShoppingCart } from "lucide-react";
+import { Heart, ShoppingCart, Loader2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { StarRating } from "@/components/ui/star-rating";
 import { Button } from "@/components/ui/button";
 import { ProductImage } from "@/components/products/product-image";
 import { useCartStore } from "@/lib/store/cart-store";
-import { useWishlistStore } from "@/lib/store/wishlist-store";
 import { useMounted } from "@/hooks/use-mounted";
+import { useFavoriteAction } from "@/hooks/use-auth";
 import { formatPrice, getEffectivePrice } from "@/lib/utils";
 import type { Product } from "@/types/database";
 import { cn } from "@/lib/utils";
@@ -21,8 +20,8 @@ interface ProductCardProps {
 }
 
 export function ProductCard({ product, className }: ProductCardProps) {
-  const addToCart = useCartStore((s) => s.addItem);
-  const { toggleItem, isInWishlist } = useWishlistStore();
+  const addItemAndOpenDrawer = useCartStore((s) => s.addItemAndOpenDrawer);
+  const { handleFavorite, pending, isInWishlist } = useFavoriteAction();
   const mounted = useMounted();
   const inWishlist = mounted && isInWishlist(product.id);
   const effectivePrice = getEffectivePrice(product);
@@ -44,10 +43,17 @@ export function ProductCard({ product, className }: ProductCardProps) {
           {onSale && <Badge variant="sale" className="text-[10px] font-bold px-2">SALE</Badge>}
         </div>
         <button
-          onClick={() => toggleItem(product)}
-          className="absolute top-3 right-3 z-10 h-9 w-9 rounded-full bg-white shadow-md flex items-center justify-center hover:scale-110 transition-transform"
+          type="button"
+          onClick={() => handleFavorite(product)}
+          disabled={pending === product.id}
+          aria-label={inWishlist ? "Remove from favorites" : "Add to favorites"}
+          className="absolute top-3 right-3 z-10 h-9 w-9 rounded-full bg-white shadow-md flex items-center justify-center hover:scale-110 transition-transform disabled:opacity-60"
         >
-          <Heart className={cn("h-4 w-4", inWishlist ? "fill-red-500 text-red-500" : "text-muted-foreground")} />
+          {pending === product.id ? (
+            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+          ) : (
+            <Heart className={cn("h-4 w-4", inWishlist ? "fill-red-500 text-red-500" : "text-muted-foreground")} />
+          )}
         </button>
       </div>
 
@@ -78,9 +84,10 @@ export function ProductCard({ product, className }: ProductCardProps) {
           <Button
             size="icon"
             className="h-9 w-9 rounded-full bg-nca-green hover:bg-nca-green-dark shrink-0"
+            aria-label="Add to cart"
             onClick={() => {
-              addToCart(product);
-              toast.success("Added to cart!");
+              const added = addItemAndOpenDrawer(product);
+              toast.success(added ? "Added to cart" : "Already in your cart");
             }}
           >
             <ShoppingCart className="h-4 w-4" />
