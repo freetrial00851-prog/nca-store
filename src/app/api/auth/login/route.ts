@@ -1,4 +1,5 @@
 import { createServerClient } from "@supabase/ssr";
+import { cookies } from "next/headers";
 import { NextResponse, type NextRequest } from "next/server";
 import { resolvePostAuthDestination, sanitizeReturnTo } from "@/lib/auth-intent";
 import { sanitizeLoginError } from "@/lib/auth-errors";
@@ -35,7 +36,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const cookieResponse = NextResponse.next();
+  const cookieStore = await cookies();
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -43,12 +44,11 @@ export async function POST(request: NextRequest) {
     {
       cookies: {
         getAll() {
-          return request.cookies.getAll();
+          return cookieStore.getAll();
         },
         setAll(cookiesToSet) {
           cookiesToSet.forEach(({ name, value, options }) => {
-            request.cookies.set(name, value);
-            cookieResponse.cookies.set(name, value, options);
+            cookieStore.set(name, value, options);
           });
         },
       },
@@ -59,6 +59,9 @@ export async function POST(request: NextRequest) {
     email,
     password,
   });
+
+  console.log("[api/auth/login] signInWithPassword error:", error ?? null);
+  console.log("[api/auth/login] data.session present:", Boolean(data.session));
 
   if (error) {
     return NextResponse.json(
@@ -87,11 +90,5 @@ export async function POST(request: NextRequest) {
   }
 
   const destination = resolvePostAuthDestination(redirectTo, isAdmin);
-  const jsonResponse = NextResponse.json({ ok: true, destination });
-
-  cookieResponse.cookies.getAll().forEach((cookie) => {
-    jsonResponse.cookies.set(cookie);
-  });
-
-  return jsonResponse;
+  return NextResponse.json({ ok: true, destination });
 }

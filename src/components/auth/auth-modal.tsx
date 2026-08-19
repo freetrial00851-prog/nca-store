@@ -8,8 +8,7 @@ import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
 import { useAuthUiStore } from "@/lib/store/auth-ui-store";
 import { useWishlistStore } from "@/lib/store/wishlist-store";
-import { performClientLogin } from "@/lib/client-auth";
-import { signupAction } from "@/app/actions/auth";
+import { loginAction, signupAction } from "@/app/actions/auth";
 import { completePendingAuthAction } from "@/app/actions/pending-auth";
 import {
   saveAuthIntent,
@@ -17,7 +16,7 @@ import {
 } from "@/lib/auth-intent";
 import { sanitizeAuthError, sanitizeLoginError } from "@/lib/auth-errors";
 import { EmailConfirmationPanel } from "@/components/auth/email-confirmation-panel";
-import { isClientDemoMode } from "@/lib/checkout-client";
+import { isClientDemoMode, isNextRedirectError } from "@/lib/checkout-client";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 
@@ -65,9 +64,7 @@ export function AuthModal() {
     e.preventDefault();
     setLoading(true);
 
-    const returnTo = sanitizeReturnTo(
-      pendingIntent?.returnTo ?? (typeof window !== "undefined" ? window.location.pathname + window.location.search : "/")
-    );
+    const returnTo = sanitizeReturnTo(pendingIntent?.returnTo ?? "/");
 
     if (pendingIntent) {
       saveAuthIntent({ ...pendingIntent, returnTo });
@@ -77,35 +74,26 @@ export function AuthModal() {
       if (isDemo) {
         closeAuthModal();
         toast.success("Signed in (demo mode)");
+        window.location.assign(returnTo);
         return;
       }
 
-      const result = await performClientLogin({
-        email,
-        password,
-        redirectTo: returnTo,
-      });
-
-      if (!result.ok) {
-        toast.error(result.message);
-        setLoading(false);
-        return;
-      }
-
-      await completePendingAuthAction(pendingIntent ?? { returnTo });
+      const formData = new FormData();
+      formData.set("email", email);
+      formData.set("password", password);
+      formData.set("redirect", returnTo);
+      if (pendingIntent?.action) formData.set("action", pendingIntent.action);
+      if (pendingIntent?.productId) formData.set("productId", pendingIntent.productId);
 
       if (pendingIntent?.action === "favorite" && pendingIntent.productSnapshot) {
         useWishlistStore.getState().addItem(pendingIntent.productSnapshot as import("@/types/database").Product);
-        toast.success("Saved to your favorites");
-      } else {
-        toast.success("Signed in successfully");
       }
 
       closeAuthModal();
-      router.refresh();
+      await loginAction(formData);
     } catch (err) {
+      if (isNextRedirectError(err)) throw err;
       toast.error(sanitizeLoginError(err instanceof Error ? err.message : "Unable to sign in"));
-    } finally {
       setLoading(false);
     }
   }
@@ -124,9 +112,7 @@ export function AuthModal() {
     }
 
     setLoading(true);
-    const returnTo = sanitizeReturnTo(
-      pendingIntent?.returnTo ?? (typeof window !== "undefined" ? window.location.pathname + window.location.search : "/")
-    );
+    const returnTo = sanitizeReturnTo(pendingIntent?.returnTo ?? "/");
 
     if (pendingIntent) {
       saveAuthIntent({ ...pendingIntent, returnTo });

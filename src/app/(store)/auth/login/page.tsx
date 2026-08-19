@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useEffect } from "react";
+import { useActionState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,10 +11,10 @@ import {
   sanitizeReturnTo,
   saveAuthIntent,
 } from "@/lib/auth-intent";
-import { performClientLogin } from "@/lib/client-auth";
+import { loginFormAction } from "@/app/actions/auth";
 import { isClientDemoMode } from "@/lib/checkout-client";
 import { toast } from "sonner";
-import { Suspense } from "react";
+import { Suspense, useState } from "react";
 
 function LoginForm() {
   const searchParams = useSearchParams();
@@ -23,46 +23,29 @@ function LoginForm() {
     searchParams.get("redirect") ?? searchParams.get("returnTo")
   );
   const isDemo = isClientDemoMode();
-  const [email, setEmail] = useState(isDemo ? "sarah@example.com" : "");
-  const [password, setPassword] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [state, formAction, pending] = useActionState(loginFormAction, {});
+  const [demoEmail] = useState(isDemo ? "sarah@example.com" : "");
 
   useEffect(() => {
     const error = searchParams.get("error");
     if (error === "confirmation_failed") {
-      toast.error("This confirmation link has expired or is invalid. Please sign in or request a new link.");
+      toast.error(
+        "This confirmation link has expired or is invalid. Please sign in or request a new link."
+      );
     }
   }, [searchParams]);
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setLoading(true);
-
+  useEffect(() => {
     if (intentFromUrl) {
       saveAuthIntent(intentFromUrl);
     } else if (redirect !== "/") {
       saveAuthIntent({ returnTo: redirect });
     }
+  }, [intentFromUrl, redirect]);
 
-    if (isDemo) {
-      window.location.assign(redirect);
-      return;
-    }
-
-    const result = await performClientLogin({
-      email,
-      password,
-      redirectTo: redirect,
-    });
-
-    if (!result.ok) {
-      toast.error(result.message);
-      setLoading(false);
-      return;
-    }
-
-    toast.success("Signed in successfully");
-    window.location.assign(result.destination);
+  async function handleDemoSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    window.location.assign(redirect);
   }
 
   const signupHref = `/auth/signup?redirect=${encodeURIComponent(redirect)}${
@@ -88,29 +71,45 @@ function LoginForm() {
           </p>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        {state.error && (
+          <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2 mb-4">
+            {state.error}
+          </p>
+        )}
+
+        <form
+          action={isDemo ? undefined : formAction}
+          onSubmit={isDemo ? handleDemoSubmit : undefined}
+          className="space-y-4"
+        >
+          <input type="hidden" name="redirect" value={redirect} />
+          {intentFromUrl?.action && (
+            <input type="hidden" name="action" value={intentFromUrl.action} />
+          )}
+          {intentFromUrl?.productId && (
+            <input type="hidden" name="productId" value={intentFromUrl.productId} />
+          )}
           <div>
             <label className="text-sm font-medium mb-1 block">Email</label>
             <Input
               type="email"
+              name="email"
               required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              defaultValue={demoEmail}
               autoComplete="email"
             />
           </div>
           <div>
             <label className="text-sm font-medium mb-1 block">Password</label>
             <PasswordInput
+              name="password"
               required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
               placeholder={isDemo ? "any password" : ""}
               autoComplete="current-password"
             />
           </div>
-          <Button type="submit" className="w-full" disabled={loading}>
-            {loading ? "Signing in..." : "Sign In"}
+          <Button type="submit" className="w-full" disabled={pending}>
+            {pending ? "Signing in..." : "Sign In"}
           </Button>
         </form>
 

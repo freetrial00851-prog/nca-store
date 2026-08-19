@@ -30,6 +30,9 @@ export async function performClientLogin(options: {
       message?: string;
     };
 
+    console.log("[client-auth] /api/auth/login response status:", res.status);
+    console.log("[client-auth] /api/auth/login response body:", data);
+
     if (!res.ok || !data.ok) {
       return {
         ok: false,

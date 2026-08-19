@@ -5,7 +5,10 @@ import { createClient } from "@/lib/supabase/server";
 import { isDemoMode, isSupabaseConfigured } from "@/lib/demo-mode";
 import { buildAuthCallbackUrl, resolvePostAuthDestination, sanitizeReturnTo } from "@/lib/auth-intent";
 import { sanitizeLoginError } from "@/lib/auth-errors";
-import { syncGuestWishlistOnLogin } from "@/app/actions/pending-auth";
+import {
+  completePendingAuthAction,
+  syncGuestWishlistOnLogin,
+} from "@/app/actions/pending-auth";
 
 export async function loginAction(formData: FormData) {
   const email = (formData.get("email") as string)?.trim();
@@ -43,6 +46,14 @@ export async function loginAction(formData: FormData) {
     }
   }
 
+  if (action === "favorite" && productId) {
+    await completePendingAuthAction({
+      returnTo: redirectTo,
+      action: "favorite",
+      productId,
+    });
+  }
+
   let isAdmin = false;
   try {
     const { data: role } = await supabase
@@ -56,13 +67,36 @@ export async function loginAction(formData: FormData) {
   }
 
   const destination = resolvePostAuthDestination(redirectTo, isAdmin);
-
-  if (action || productId) {
-    // Client-side PendingActionHandler reads sessionStorage; server can't set it.
-    // Pass via query for page loads when sessionStorage wasn't set.
-  }
-
   redirect(destination);
+}
+
+export type LoginFormState = { error?: string };
+
+function isRedirectError(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "digest" in error &&
+    typeof (error as { digest: string }).digest === "string" &&
+    (error as { digest: string }).digest.startsWith("NEXT_REDIRECT")
+  );
+}
+
+export async function loginFormAction(
+  _prevState: LoginFormState,
+  formData: FormData
+): Promise<LoginFormState> {
+  try {
+    await loginAction(formData);
+  } catch (error) {
+    if (isRedirectError(error)) throw error;
+    return {
+      error: sanitizeLoginError(
+        error instanceof Error ? error.message : "Unable to sign in."
+      ),
+    };
+  }
+  return {};
 }
 
 export async function signupAction(formData: FormData) {
