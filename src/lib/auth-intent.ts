@@ -13,6 +13,9 @@ export interface ProductSnapshot {
   is_active: boolean;
 }
 
+const AUTH_INTENT_KEY = "nca-auth-intent";
+const INTENT_MAX_AGE_MS = 30 * 60 * 1000;
+
 export interface AuthIntent {
   returnTo: string;
   action?: PendingAuthAction | null;
@@ -21,9 +24,6 @@ export interface AuthIntent {
   message?: string;
   createdAt: number;
 }
-
-const AUTH_INTENT_KEY = "nca-auth-intent";
-const INTENT_MAX_AGE_MS = 30 * 60 * 1000;
 
 /** Validates internal redirect paths — blocks open redirects. */
 export function sanitizeReturnTo(path: string | null | undefined, fallback = "/"): string {
@@ -58,6 +58,19 @@ export function buildAuthLoginUrl(options?: {
   return `/auth/login?${params.toString()}`;
 }
 
+export function buildAuthCallbackUrl(options: {
+  returnTo: string;
+  action?: string | null;
+  productId?: string | null;
+}): string {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+  const url = new URL("/auth/callback", appUrl);
+  url.searchParams.set("returnTo", sanitizeReturnTo(options.returnTo));
+  if (options.action) url.searchParams.set("action", options.action);
+  if (options.productId) url.searchParams.set("productId", options.productId);
+  return url.toString();
+}
+
 export function resolvePostAuthDestination(
   returnTo: string,
   isAdmin: boolean
@@ -69,13 +82,13 @@ export function resolvePostAuthDestination(
 export function saveAuthIntent(intent: Omit<AuthIntent, "createdAt">): void {
   if (typeof window === "undefined") return;
   const payload: AuthIntent = { ...intent, createdAt: Date.now() };
-  sessionStorage.setItem(AUTH_INTENT_KEY, JSON.stringify(payload));
+  localStorage.setItem(AUTH_INTENT_KEY, JSON.stringify(payload));
 }
 
 export function loadAuthIntent(): AuthIntent | null {
   if (typeof window === "undefined") return null;
   try {
-    const raw = sessionStorage.getItem(AUTH_INTENT_KEY);
+    const raw = localStorage.getItem(AUTH_INTENT_KEY);
     if (!raw) return null;
     const intent = JSON.parse(raw) as AuthIntent;
     if (Date.now() - intent.createdAt > INTENT_MAX_AGE_MS) {
@@ -93,17 +106,33 @@ export function loadAuthIntent(): AuthIntent | null {
 
 export function clearAuthIntent(): void {
   if (typeof window === "undefined") return;
-  sessionStorage.removeItem(AUTH_INTENT_KEY);
+  localStorage.removeItem(AUTH_INTENT_KEY);
 }
 
 export function parseAuthIntentFromSearchParams(
   searchParams: URLSearchParams
 ): Omit<AuthIntent, "createdAt"> | null {
   const redirect = searchParams.get("redirect") ?? searchParams.get("returnTo");
-  if (!redirect && !searchParams.get("action")) return null;
+  const action = searchParams.get("action") as PendingAuthAction | null;
+  const productId = searchParams.get("productId");
+
+  if (!redirect && !action && !productId) return null;
 
   return {
     returnTo: sanitizeReturnTo(redirect ?? "/"),
+    action: action || null,
+    productId: productId ?? undefined,
+  };
+}
+
+export function parseWelcomeParams(
+  searchParams: URLSearchParams
+): Omit<AuthIntent, "createdAt"> | null {
+  const returnTo = searchParams.get("returnTo");
+  if (!returnTo) return null;
+
+  return {
+    returnTo: sanitizeReturnTo(returnTo),
     action: (searchParams.get("action") as PendingAuthAction) || null,
     productId: searchParams.get("productId") ?? undefined,
   };

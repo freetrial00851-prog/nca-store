@@ -9,6 +9,7 @@ interface WishlistState {
   toggleItem: (product: Product) => void;
   isInWishlist: (productId: string) => boolean;
   clearWishlist: () => void;
+  mergeItems: (products: Product[]) => void;
   getItemCount: () => number;
 }
 
@@ -44,6 +45,16 @@ export const useWishlistStore = create<WishlistState>()(
       },
 
       clearWishlist: () => set({ items: [] }),
+
+      mergeItems: (products) => {
+        set((state) => {
+          const byId = new Map(state.items.map((p) => [p.id, p]));
+          for (const product of products) {
+            byId.set(product.id, product);
+          }
+          return { items: Array.from(byId.values()) };
+        });
+      },
 
       getItemCount: () => get().items.length,
     }),

@@ -14,6 +14,7 @@ import {
 } from "@/lib/auth-intent";
 import { sanitizeAuthError } from "@/lib/auth-errors";
 import { isClientDemoMode } from "@/lib/checkout-client";
+import { EmailConfirmationPanel } from "@/components/auth/email-confirmation-panel";
 import { toast } from "sonner";
 import { Suspense } from "react";
 
@@ -87,22 +88,14 @@ function SignupForm() {
         <Link href="/" className="font-serif text-2xl font-bold text-nca-green">NCA</Link>
 
         {confirmationSent ? (
-          <div className="mt-8 text-center py-4">
-            <div className="mx-auto mb-4 h-12 w-12 rounded-full bg-nca-sage flex items-center justify-center text-nca-green text-xl font-bold">
-              ✓
-            </div>
-            <h1 className="font-serif text-2xl font-bold mb-2">Confirm your email</h1>
-            <p className="text-sm text-muted-foreground mb-2">
-              We sent a confirmation link to:
-            </p>
-            <p className="text-sm font-medium mb-4">{sentEmail}</p>
-            <p className="text-sm text-muted-foreground">
-              Please check your inbox and click the confirmation link to activate your account.
-            </p>
-            <Button variant="outline" className="mt-6 w-full" asChild>
-              <Link href={loginHref}>Back to Sign In</Link>
-            </Button>
-          </div>
+          <EmailConfirmationPanel
+            email={sentEmail}
+            returnTo={returnTo}
+            onChangeEmail={() => {
+              setConfirmationSent(false);
+              setSentEmail("");
+            }}
+          />
         ) : (
           <>
             <h1 className="font-serif text-2xl font-bold mt-6 mb-1">Create Account</h1>

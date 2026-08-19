@@ -6,8 +6,10 @@ import { useState } from "react";
 import { Heart, User, ShoppingBag, Menu, LayoutGrid, X } from "lucide-react";
 import { useCartStore } from "@/lib/store/cart-store";
 import { useWishlistStore } from "@/lib/store/wishlist-store";
-import { useMounted } from "@/hooks/use-mounted";
 import { cn } from "@/lib/utils";
+import { useAuthSession } from "@/hooks/use-auth";
+import { buildAuthLoginUrl } from "@/lib/auth-intent";
+import { useMounted } from "@/hooks/use-mounted";
 
 const navLinks = [
   { href: "/shop", label: "Shop All" },
@@ -85,6 +87,7 @@ function CartIconAction({
 export function Header() {
   const pathname = usePathname();
   const mounted = useMounted();
+  const { user, loading: authLoading, isAuthenticated } = useAuthSession();
   const [menuOpen, setMenuOpen] = useState(false);
   const [categoriesOpen, setCategoriesOpen] = useState(false);
   const cartCount = useCartStore((s) => s.getItemCount());
@@ -131,7 +134,15 @@ export function Header() {
 
             <div className="flex items-center gap-1 shrink-0">
               <IconAction href="/account/wishlist" icon={Heart} label="Wishlist" count={displayWishlistCount} />
-              <IconAction href="/account" icon={User} label="Account" />
+              {mounted && !authLoading && isAuthenticated ? (
+                <IconAction href="/account" icon={User} label="Account" />
+              ) : (
+                <IconAction
+                  href={buildAuthLoginUrl({ returnTo: "/account" })}
+                  icon={User}
+                  label="Sign In"
+                />
+              )}
               <CartIconAction count={displayCartCount} onClick={openDrawer} />
               <button
                 type="button"

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,6 +28,13 @@ function LoginForm() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const wishlistIds = useWishlistStore((s) => s.items.map((i) => i.id));
+
+  useEffect(() => {
+    const error = searchParams.get("error");
+    if (error === "confirmation_failed") {
+      toast.error("This confirmation link has expired or is invalid. Please sign in or request a new link.");
+    }
+  }, [searchParams]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();

@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { completePendingAuthAction } from "@/app/actions/pending-auth";
+import { getWishlistProducts } from "@/app/actions/wishlist";
 import { loadAuthIntent, clearAuthIntent } from "@/lib/auth-intent";
 import { isClientDemoMode } from "@/lib/checkout-client";
 import { useWishlistStore } from "@/lib/store/wishlist-store";
@@ -14,6 +15,7 @@ import type { Product } from "@/types/database";
 export function PendingActionHandler() {
   const router = useRouter();
   const addWishlistItem = useWishlistStore((s) => s.addItem);
+  const mergeItems = useWishlistStore((s) => s.mergeItems);
 
   useEffect(() => {
     if (isClientDemoMode()) return;
@@ -26,13 +28,16 @@ export function PendingActionHandler() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      if (user.email && !user.email_confirmed_at) return;
-
       try {
         await completePendingAuthAction(intent);
 
-        if (intent.action === "favorite" && intent.productSnapshot) {
-          addWishlistItem(intent.productSnapshot as Product);
+        if (intent.action === "favorite") {
+          if (intent.productSnapshot) {
+            addWishlistItem(intent.productSnapshot as Product);
+          } else {
+            const products = await getWishlistProducts();
+            mergeItems(products);
+          }
           toast.success("Saved to your favorites");
         }
 
@@ -44,7 +49,7 @@ export function PendingActionHandler() {
     }
 
     run();
-  }, [router, addWishlistItem]);
+  }, [router, addWishlistItem, mergeItems]);
 
   return null;
 }

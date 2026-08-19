@@ -3,10 +3,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { isDemoMode, isSupabaseConfigured } from "@/lib/demo-mode";
-import {
-  resolvePostAuthDestination,
-  sanitizeReturnTo,
-} from "@/lib/auth-intent";
+import { buildAuthCallbackUrl, resolvePostAuthDestination, sanitizeReturnTo } from "@/lib/auth-intent";
 import { sanitizeLoginError } from "@/lib/auth-errors";
 import { syncGuestWishlistOnLogin } from "@/app/actions/pending-auth";
 
@@ -73,6 +70,8 @@ export async function signupAction(formData: FormData) {
   const password = formData.get("password") as string;
   const fullName = (formData.get("fullName") as string)?.trim();
   const returnTo = sanitizeReturnTo(formData.get("returnTo") as string);
+  const action = formData.get("action") as string | null;
+  const productId = formData.get("productId") as string | null;
 
   if (isDemoMode()) {
     return { needsConfirmation: false };
@@ -87,14 +86,14 @@ export async function signupAction(formData: FormData) {
   }
 
   const supabase = await createClient();
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+  const emailRedirectTo = buildAuthCallbackUrl({ returnTo, action, productId });
 
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
     options: {
       data: { full_name: fullName },
-      emailRedirectTo: `${appUrl}/auth/callback?returnTo=${encodeURIComponent(returnTo)}`,
+      emailRedirectTo,
     },
   });
 
@@ -156,18 +155,16 @@ export async function resetPasswordAction(formData: FormData) {
   return { success: true };
 }
 
-export async function resendConfirmationAction(email: string) {
+export async function resendConfirmationAction(email: string, returnTo = "/") {
   if (isDemoMode()) return { success: true };
 
   const supabase = await createClient();
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+  const emailRedirectTo = buildAuthCallbackUrl({ returnTo: sanitizeReturnTo(returnTo) });
 
   const { error } = await supabase.auth.resend({
     type: "signup",
     email,
-    options: {
-      emailRedirectTo: `${appUrl}/auth/callback`,
-    },
+    options: { emailRedirectTo },
   });
 
   if (error) throw new Error(error.message);
