@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { Menu, X, LayoutDashboard, Package, ShoppingBag, Tag, Users, LogOut } from "lucide-react";
+import { performLogout } from "@/lib/logout-client";
 
 const adminNav = [
   { href: "/admin", label: "Overview", icon: LayoutDashboard },
@@ -14,6 +15,12 @@ const adminNav = [
 
 export function AdminShell({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
+
+  async function handleLogout() {
+    setLoggingOut(true);
+    await performLogout();
+  }
 
   return (
     <div className="min-h-screen flex bg-muted/30">
@@ -36,9 +43,14 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           ))}
         </nav>
         <div className="p-3 space-y-1 border-t border-white/10">
-          <Link href="/auth/logout" className="flex items-center gap-2 px-3 py-2 text-sm text-white/70 hover:text-white">
-            <LogOut className="h-4 w-4" /> Log Out
-          </Link>
+          <button
+            type="button"
+            onClick={handleLogout}
+            disabled={loggingOut}
+            className="flex w-full items-center gap-2 px-3 py-2 text-sm text-white/70 hover:text-white disabled:opacity-60"
+          >
+            <LogOut className="h-4 w-4" /> {loggingOut ? "Signing out..." : "Log Out"}
+          </button>
           <Link href="/" className="flex items-center gap-2 px-3 py-2 text-sm text-white/70 hover:text-white">
             ← Back to Store
           </Link>
@@ -77,9 +89,14 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
                     {label}
                   </Link>
                 ))}
-                <Link href="/auth/logout" onClick={() => setOpen(false)} className="flex items-center gap-3 px-3 py-3 rounded-lg text-sm hover:bg-white/10">
-                  <LogOut className="h-4 w-4" /> Log Out
-                </Link>
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  disabled={loggingOut}
+                  className="flex w-full items-center gap-3 px-3 py-3 rounded-lg text-sm hover:bg-white/10 disabled:opacity-60"
+                >
+                  <LogOut className="h-4 w-4" /> {loggingOut ? "Signing out..." : "Log Out"}
+                </button>
                 <Link href="/" onClick={() => setOpen(false)} className="block px-3 py-3 text-sm text-white/70">
                   ← Back to Store
                 </Link>

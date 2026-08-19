@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useState } from "react";
 import {
   LayoutDashboard,
   ShoppingBag,
@@ -16,6 +17,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { performLogout } from "@/lib/logout-client";
 
 const navItems = [
   { label: "Dashboard", href: "/account", icon: LayoutDashboard },
@@ -26,11 +28,16 @@ const navItems = [
   { label: "Addresses", href: "/account/addresses", icon: MapPin },
   { label: "Account Settings", href: "/account/settings", icon: Settings },
   { label: "Newsletter", href: "/account/newsletter", icon: Mail },
-  { label: "Log Out", href: "/auth/logout", icon: LogOut },
 ];
 
 export function AccountSidebar() {
   const pathname = usePathname();
+  const [loggingOut, setLoggingOut] = useState(false);
+
+  async function handleLogout() {
+    setLoggingOut(true);
+    await performLogout();
+  }
 
   return (
     <aside className="space-y-4">
@@ -39,7 +46,7 @@ export function AccountSidebar() {
           const isActive =
             item.href === "/account"
               ? pathname === "/account"
-              : pathname.startsWith(item.href) && item.href !== "/auth/logout";
+              : pathname.startsWith(item.href);
           const Icon = item.icon;
 
           return (
@@ -50,8 +57,7 @@ export function AccountSidebar() {
                 "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
                 isActive
                   ? "bg-[#E8EFE9] text-[#2D4A3E]"
-                  : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
-                item.label === "Log Out" && "text-red-600 hover:text-red-700"
+                  : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
               )}
             >
               <Icon className="size-4 shrink-0" />
@@ -59,6 +65,16 @@ export function AccountSidebar() {
             </Link>
           );
         })}
+
+        <button
+          type="button"
+          onClick={handleLogout}
+          disabled={loggingOut}
+          className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-red-600 transition-colors hover:bg-muted/50 hover:text-red-700 disabled:opacity-60"
+        >
+          <LogOut className="size-4 shrink-0" />
+          {loggingOut ? "Signing out..." : "Log Out"}
+        </button>
       </nav>
 
       <div className="rounded-xl border border-[#E8EFE9] bg-[#E8EFE9]/40 p-5">
